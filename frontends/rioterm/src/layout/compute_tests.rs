@@ -236,6 +236,31 @@ fn test_compute_floors_fractional_rows() {
 }
 
 #[test]
+fn test_grid_offset_balances_vertical_remainder_on_integer_pixels() {
+    for (height, expected) in [(984.0, 0.0), (1006.0, 11.0), (1007.0, 11.0)] {
+        assert_eq!(balanced_grid_offset(height, 41, 24), expected);
+    }
+
+    let dims = TextDimensions {
+        width: 12.0,
+        height: 24.0,
+        scale: 2.0,
+    };
+    let context = ContextDimension::build(
+        1200.0,
+        1026.0,
+        dims,
+        cell_for(dims),
+        1.0,
+        14.0,
+        Margin::new(5.0, 0.0, 5.0, 0.0),
+    );
+
+    assert_eq!(context.lines, 41);
+    assert_eq!(context.balanced_grid_offset_y(), 11.0);
+}
+
+#[test]
 fn test_compute_respects_margins() {
     let dims = TextDimensions {
         width: 16.0,

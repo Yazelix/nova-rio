@@ -291,7 +291,8 @@ impl Renderer {
         }
 
         for (_key, grid_context) in grid.contexts_mut().iter_mut() {
-            let panel_rect = grid_context.layout_rect;
+            let [grid_origin_x, grid_origin_y] =
+                grid_context.grid_origin(grid_scaled_margin);
             let context = grid_context.context_mut();
 
             let mut has_ime = false;
@@ -419,12 +420,8 @@ impl Renderer {
                 // grid uniform paints with.
                 let cell_width = layout.cell.cell_width as f32;
                 let cell_height = layout.cell.cell_height as f32;
-                // Rounded like the grid's own paint origin
-                // (screen/mod.rs panel_left/panel_top), so image quads
-                // and the clip rect sit exactly on the painted cell
-                // grid instead of up to half a pixel off.
-                let origin_x = (panel_rect[0] + grid_scaled_margin.left).round();
-                let origin_y = (panel_rect[1] + grid_scaled_margin.top).round();
+                let origin_x = grid_origin_x;
+                let origin_y = grid_origin_y;
 
                 // Images clip to the panel's cell grid, exactly like
                 // text: without this a wide image paints across split
@@ -643,10 +640,8 @@ impl Renderer {
                 let cell_h = dim.cell.cell_height as f32;
                 let cols = dim.columns.max(1) as f32;
                 let rows = dim.lines.max(1) as f32;
-                let panel_left =
-                    (grid_context.layout_rect[0] + grid_scaled_margin.left).round();
-                let panel_top =
-                    (grid_context.layout_rect[1] + grid_scaled_margin.top).round();
+                let [panel_left, panel_top] =
+                    grid_context.grid_origin(grid_scaled_margin);
                 let x = panel_left / scale_factor;
                 let y = panel_top / scale_factor;
                 let w = (cols * cell_w) / scale_factor;

@@ -4107,6 +4107,12 @@ impl<U: EventListener> Handler for Crosswords<U> {
                     self.grid.reset_region(..);
                     let columns = self.grid.columns();
                     self.clip_atlas_placements(0, screen_lines as i32, 0, columns);
+                    // Unlike the main screen, there is no history for
+                    // erased Kitty placements to follow.
+                    if !self.graphics.kitty_placements.is_empty() {
+                        self.graphics.kitty_placements.clear();
+                        self.graphics.kitty_graphics_dirty = true;
+                    }
                 } else {
                     // The viewport scrolls into history below; atlas
                     // placements are absolutely anchored and follow
@@ -6940,6 +6946,72 @@ mod tests {
         assert_eq!(version_number("0.1.2-nightly"), 1_02);
         assert_eq!(version_number("1.2.3-nightly"), 1_02_03);
         assert_eq!(version_number("999.99.99"), 9_99_99_99);
+    }
+
+    #[test]
+    fn kitty_placements_clear_only_on_alt_screen_full_erase() {
+        let mut term = make_crosswords();
+        for _ in 0..4 {
+            term.linefeed();
+        }
+        assert_eq!(term.history_size(), 1);
+
+        let placement = KittyPlacement {
+            image_id: 1,
+            placement_id: 1,
+            source_x: 0,
+            source_y: 0,
+            source_width: 1,
+            source_height: 1,
+            dest_col: 0,
+            dest_row: 0,
+            columns: 1,
+            rows: 1,
+            requested_columns: 1,
+            requested_rows: 1,
+            pixel_width: 1,
+            pixel_height: 1,
+            cell_x_offset: 0,
+            cell_y_offset: 0,
+            z_index: 0,
+            transmit_time: crate::time::Instant::now(),
+        };
+        term.graphics
+            .kitty_placements
+            .insert((1, 1), placement.clone());
+
+        for mode in [ClearMode::Above, ClearMode::Below, ClearMode::Saved] {
+            term.clear_screen(mode);
+            assert_eq!(
+                term.graphics.kitty_placements.get(&(1, 1)),
+                Some(&placement)
+            );
+        }
+        assert_eq!(term.history_size(), 0);
+
+        term.graphics.kitty_graphics_dirty = false;
+        term.clear_screen(ClearMode::All);
+        assert_eq!(
+            term.graphics.kitty_placements.get(&(1, 1)),
+            Some(&placement)
+        );
+        assert!(term.graphics.kitty_graphics_dirty);
+
+        let mut processor = crate::performer::handler::Processor::default();
+        processor.advance(&mut term, b"\x1b[?1049h");
+        term.graphics
+            .kitty_placements
+            .insert((1, 1), placement.clone());
+        term.graphics.kitty_graphics_dirty = false;
+        processor.advance(&mut term, b"\x1b[2J");
+        assert!(term.graphics.kitty_placements.is_empty());
+        assert!(term.graphics.kitty_graphics_dirty);
+
+        processor.advance(&mut term, b"\x1b[?1049l");
+        assert_eq!(
+            term.graphics.kitty_placements.get(&(1, 1)),
+            Some(&placement)
+        );
     }
 
     #[test]

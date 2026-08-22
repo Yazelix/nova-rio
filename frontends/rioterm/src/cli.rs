@@ -1,8 +1,8 @@
 // cli.rs was retired originally from https://github.com/alacritty/alacritty/blob/e35e5ad14fce8456afdd89f2b392b9924bb27471/alacritty/src/cli.rs
 // which is licensed under Apache 2.0 license.
 
-use clap::{Args, Parser, ValueHint};
-use rio_backend::config::Shell;
+use clap::{Args, Parser, ValueEnum, ValueHint};
+use rio_backend::config::{theme::AppearanceTheme, Shell};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -19,6 +19,22 @@ pub struct WindowOptions {
     /// Terminal options which can be passed via IPC.
     #[clap(flatten)]
     pub terminal_options: TerminalOptions,
+}
+
+#[derive(Serialize, Deserialize, ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemeMode {
+    Dark,
+    Light,
+}
+
+impl From<ThemeMode> for AppearanceTheme {
+    fn from(mode: ThemeMode) -> Self {
+        match mode {
+            ThemeMode::Dark => Self::Dark,
+            ThemeMode::Light => Self::Light,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Args, Default, Debug, Clone, PartialEq, Eq)]
@@ -46,6 +62,10 @@ pub struct TerminalOptions {
     /// Set the Wayland app_id or X11 WM_CLASS (Linux/BSD only)
     #[clap(long)]
     pub app_id: Option<String>,
+
+    /// Override the configured adaptive theme for this process.
+    #[clap(long, value_enum)]
+    pub theme_mode: Option<ThemeMode>,
 }
 
 impl TerminalOptions {
@@ -77,4 +97,19 @@ impl TerminalOptions {
 
     //     pty_config.hold |= self.hold;
     // }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_theme_mode_and_rejects_auto() {
+        let cli = Cli::try_parse_from(["rio", "--theme-mode", "light"]).unwrap();
+        assert_eq!(
+            cli.window_options.terminal_options.theme_mode,
+            Some(ThemeMode::Light)
+        );
+        assert!(Cli::try_parse_from(["rio", "--theme-mode", "auto"]).is_err());
+    }
 }

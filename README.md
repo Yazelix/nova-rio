@@ -3,7 +3,7 @@
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only
-three behavioral deltas:
+four behavioral deltas:
 
 - Alternate-screen `CSI 2 J` clears obsolete direct Kitty placements. Remove
   this when upstream preserves the same main-screen scrollback boundary.
@@ -13,9 +13,12 @@ three behavioral deltas:
 - The compact quit prompt uses Nova's rounded orange treatment and measured,
   balanced spacing. Remove this when upstream styling is accepted as-is or
   exposes a native styling surface.
+- `--theme-mode dark|light` selects the configured adaptive palette at launch
+  and remains authoritative across config reloads. Remove this when upstream
+  exposes an equivalent launch override.
 
 Nova consumes exact commits rather than a moving branch. The `rio` executable,
-crates, configuration schema, and all behavior outside these three deltas remain
+crates, configuration schema, and all behavior outside these four deltas remain
 upstream-owned. Mars features and Yazelix Cursors are intentionally absent.
 
 ## Upstream Rio

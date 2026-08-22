@@ -14,6 +14,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use raw_window_handle::HasDisplayHandle;
 use rio_backend::clipboard::{Clipboard, ClipboardType};
 use rio_backend::config::colors::{ColorRgb, NamedColor};
+use rio_backend::config::theme::AppearanceTheme;
 use rio_window::application::ApplicationHandler;
 use rio_window::event::{
     ElementState, Ime, MouseButton, MouseScrollDelta, StartCause, TouchPhase, WindowEvent,
@@ -30,12 +31,39 @@ use rio_window::window::{CursorIcon, Fullscreen};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
+fn apply_theme_mode(
+    config: &mut rio_backend::config::Config,
+    theme_mode: Option<AppearanceTheme>,
+) {
+    if let Some(theme_mode) = theme_mode {
+        config.force_theme = Some(theme_mode);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn theme_mode_overrides_loaded_config() {
+        let mut config = rio_backend::config::Config {
+            force_theme: Some(AppearanceTheme::Light),
+            ..Default::default()
+        };
+
+        apply_theme_mode(&mut config, Some(AppearanceTheme::Dark));
+
+        assert_eq!(config.force_theme, Some(AppearanceTheme::Dark));
+    }
+}
+
 pub struct Application<'a> {
     config: rio_backend::config::Config,
     event_proxy: EventProxy,
     router: Router<'a>,
     scheduler: Scheduler,
     app_id: Option<String>,
+    theme_mode: Option<AppearanceTheme>,
     global_hotkey: Option<crate::global_hotkey::GlobalHotkeys>,
     /// Frontmost app when the quake window was shown, re-activated
     /// when it hides so focus returns where the user was.
@@ -45,11 +73,14 @@ pub struct Application<'a> {
 
 impl Application<'_> {
     pub fn new<'app>(
-        config: rio_backend::config::Config,
+        mut config: rio_backend::config::Config,
         config_error: Option<rio_backend::config::ConfigError>,
         event_loop: &EventLoop<EventPayload>,
         app_id: Option<String>,
+        theme_mode: Option<AppearanceTheme>,
     ) -> Application<'app> {
+        apply_theme_mode(&mut config, theme_mode);
+
         // SAFETY: Since this takes a pointer to the winit event loop, it MUST be dropped first,
         // which is done in `exiting`.
         let clipboard =
@@ -80,6 +111,7 @@ impl Application<'_> {
             router,
             scheduler,
             app_id,
+            theme_mode,
             global_hotkey: None,
             #[cfg(target_os = "macos")]
             quake_previous_app: None,
@@ -536,11 +568,14 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
                 }
             }
             RioEventType::Rio(RioEvent::UpdateConfig) => {
-                let (config, config_error) = match rio_backend::config::Config::try_load()
-                {
-                    Ok(config) => (config, None),
-                    Err(error) => (rio_backend::config::Config::default(), Some(error)),
-                };
+                let (mut config, config_error) =
+                    match rio_backend::config::Config::try_load() {
+                        Ok(config) => (config, None),
+                        Err(error) => {
+                            (rio_backend::config::Config::default(), Some(error))
+                        }
+                    };
+                apply_theme_mode(&mut config, self.theme_mode);
 
                 let has_font_updates = self.config.fonts != config.fonts;
                 let has_binding_updates = self.config.bindings != config.bindings;

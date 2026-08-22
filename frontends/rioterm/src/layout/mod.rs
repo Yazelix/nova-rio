@@ -176,9 +176,8 @@ impl<T: rio_backend::event::EventListener> ContextGridItem<T> {
         let [left, top] = self.grid_origin(scaled_margin);
         Margin {
             top,
-            right: scaled_margin.right,
-            bottom: scaled_margin.bottom,
             left,
+            ..scaled_margin
         }
     }
 }

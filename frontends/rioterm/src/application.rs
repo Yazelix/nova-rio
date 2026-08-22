@@ -35,9 +35,7 @@ fn apply_theme_mode(
     config: &mut rio_backend::config::Config,
     theme_mode: Option<AppearanceTheme>,
 ) {
-    if let Some(theme_mode) = theme_mode {
-        config.force_theme = Some(theme_mode);
-    }
+    config.force_theme = theme_mode.or(config.force_theme);
 }
 
 #[cfg(test)]

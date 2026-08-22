@@ -44,9 +44,8 @@ impl ConfirmQuit {
             ..DrawOpts::default()
         };
         let gray_opts = DrawOpts {
-            font_size: 13.0,
             color: [166, 166, 166, 255],
-            ..DrawOpts::default()
+            ..heading_opts
         };
         let text_w = {
             let ui = sugarloaf.text_mut();

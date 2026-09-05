@@ -20,7 +20,6 @@ use crate::context::{next_rich_text_id, process_open_url, ContextManager};
 use crate::crosswords::{
     grid::{Dimensions, Scroll},
     pos::{Column, Pos, Side},
-    square::Hyperlink,
     vi_mode::ViMotion,
     Mode,
 };
@@ -1937,86 +1936,73 @@ impl Screen<'_> {
     #[inline]
     /// Update hint highlighting based on mouse position and modifiers
     pub fn update_highlighted_hints(&mut self) -> bool {
-        // Check if any hint configuration has matching modifiers
-        let should_highlight = self.hints_config.iter().any(|hint_config| {
-            hint_config.mouse.enabled && self.modifiers_match(&hint_config.mouse.mods)
-        });
-
-        let had_highlight = self
-            .context_manager
-            .current()
-            .renderable_content
-            .highlighted_hint
-            .is_some();
-
-        if !should_highlight {
-            let current = self.context_manager.current_mut();
-
-            // Clear any previous hint damage
-            if current.renderable_content.highlighted_hint.is_some() {
-                let mut terminal = current.terminal.lock();
-                let display_offset = terminal.display_offset();
-                terminal.update_selection_damage(None, display_offset);
-            }
-
-            current.renderable_content.highlighted_hint = None;
-            return had_highlight;
-        }
-
-        let terminal = self.context_manager.current().terminal.lock();
-        let display_offset = terminal.display_offset();
-        let mouse_point = self.mouse_position(display_offset);
-
-        // Find hint at mouse position
-        let highlighted_hint =
-            self.find_hint_at_point(&terminal, mouse_point, self.modifiers.state());
-        drop(terminal);
-
+        let hint = self.hint_at_mouse();
         let current = self.context_manager.current_mut();
-
-        if let Some(hint_match) = highlighted_hint {
-            // Mark the hint range as damaged so it gets re-rendered.
-            //
-            // Two damage signals are required:
-            // * Terminal-side: `update_selection_damage` marks the affected
-            // lines so the partial render path knows what to redraw.
-            // * Renderer-side: `pending_update.set_terminal_damage(Full)`
-            // ensures the render loop doesn't early-exit on
-            // `!pending_update.is_dirty()`
-            {
-                let mut terminal = current.terminal.lock();
-                let display_offset = terminal.display_offset();
-
-                let hint_range = rio_backend::selection::SelectionRange::new(
-                    hint_match.start,
-                    hint_match.end,
-                    false,
-                );
-                terminal.update_selection_damage(Some(hint_range), display_offset);
-            }
-
+        if current.renderable_content.highlighted_hint != hint {
+            let range = hint.as_ref().map(|h| {
+                rio_backend::selection::SelectionRange::new(h.start, h.end, false)
+            });
+            let mut terminal = current.terminal.lock();
+            let offset = terminal.display_offset();
+            terminal.update_selection_damage(range, offset);
             current
                 .renderable_content
                 .pending_update
                 .set_terminal_damage(rio_backend::event::TerminalDamage::Full);
-            current.renderable_content.highlighted_hint = Some(hint_match);
-            true
-        } else {
-            if current.renderable_content.highlighted_hint.is_some() {
-                let mut terminal = current.terminal.lock();
-                let display_offset = terminal.display_offset();
-                terminal.update_selection_damage(None, display_offset);
-            }
+            current.renderable_content.highlighted_hint = hint;
+        }
+        current.renderable_content.highlighted_hint.is_some()
+    }
 
-            // Force a render so the previously-highlighted line clears.
-            if had_highlight {
-                current
-                    .renderable_content
-                    .pending_update
-                    .set_terminal_damage(rio_backend::event::TerminalDamage::Full);
+    fn hint_at_mouse(&self) -> Option<crate::hints::HintMatch> {
+        if !self.mouse.inside_text_area
+            || self.mouse.on_border
+            || self.renderer.assistant.is_active()
+            || self.renderer.command_palette.is_enabled()
+            || self.renderer.confirm_quit.is_active()
+        {
+            return None;
+        }
+        let terminal = self.context_manager.current().terminal.lock();
+        let point = self.mouse_position(terminal.display_offset());
+        self.hints_config
+            .iter()
+            .filter(|hint| hint.mouse.enabled && self.modifiers_match(&hint.mouse.mods))
+            .find_map(|hint| HintState::at_point(&*terminal, hint.clone(), point))
+    }
+
+    pub fn prepare_hint_click(&mut self) -> bool {
+        let Some(hint) = self.hint_at_mouse() else {
+            return false;
+        };
+        self.mouse.hint_press = Some(crate::mouse::HintPress {
+            origin: self.mouse_position(self.display_offset()),
+            target: Some(hint),
+        });
+        true
+    }
+
+    pub fn finish_hint_click(&mut self, clipboard: &mut Clipboard) -> bool {
+        let Some(press) = self.mouse.hint_press.take() else {
+            return false;
+        };
+        if let Some(target) = press.target {
+            if self.mouse_position(self.display_offset()) == press.origin
+                && self.hint_at_mouse().as_ref() == Some(&target)
+            {
+                self.execute_hint_action(&target, clipboard);
             }
-            current.renderable_content.highlighted_hint = None;
-            had_highlight
+        }
+        true
+    }
+
+    pub fn hint_cursor(&mut self) -> rio_window::window::CursorIcon {
+        if self.update_highlighted_hints() {
+            rio_window::window::CursorIcon::Pointer
+        } else if !self.modifiers.state().shift_key() && self.mouse_mode() {
+            rio_window::window::CursorIcon::Default
+        } else {
+            rio_window::window::CursorIcon::Text
         }
     }
 
@@ -2045,259 +2031,6 @@ impl Screen<'_> {
         true
     }
 
-    /// Find hint at the specified point
-    fn find_hint_at_point(
-        &self,
-        terminal: &rio_backend::crosswords::Crosswords<EventProxy>,
-        point: rio_backend::crosswords::pos::Pos,
-        _modifiers: rio_window::keyboard::ModifiersState,
-    ) -> Option<crate::hints::HintMatch> {
-        // Check each enabled hint configuration
-        for hint_config in &self.hints_config {
-            // Check if mouse highlighting is enabled for this hint
-            if !hint_config.mouse.enabled {
-                continue;
-            }
-
-            // Check if current modifiers match the required modifiers for this hint
-            if !self.modifiers_match(&hint_config.mouse.mods) {
-                continue;
-            }
-
-            // Check hyperlinks if enabled
-            if hint_config.hyperlinks {
-                if let Some(hyperlink_match) =
-                    self.find_hyperlink_at_point(terminal, point)
-                {
-                    return Some(hyperlink_match);
-                }
-            }
-
-            // Check regex patterns if specified
-            if let Some(regex_pattern) = &hint_config.regex {
-                if let Ok(regex) = onig::Regex::new(regex_pattern) {
-                    if let Some(regex_match) = self.find_regex_match_at_point(
-                        terminal,
-                        point,
-                        &regex,
-                        hint_config.clone(),
-                    ) {
-                        return Some(regex_match);
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
-    /// Find hyperlink at the specified point
-    fn find_hyperlink_at_point(
-        &self,
-        terminal: &rio_backend::crosswords::Crosswords<EventProxy>,
-        point: rio_backend::crosswords::pos::Pos,
-    ) -> Option<crate::hints::HintMatch> {
-        let grid = &terminal.grid;
-
-        // Check if the point is within grid bounds
-        if point.row >= grid.total_lines() as i32 || point.col.0 >= grid.columns() {
-            return None;
-        }
-
-        // Look up the cell's hyperlink via the per-grid extras table.
-        // Cells in the same OSC 8 span share an `extras_id`, so we
-        // walk left/right comparing the hyperlink itself (extras slots
-        // are interned by content, so a cell with combining marks has
-        // a different id while belonging to the same link) to find the
-        // span boundaries.
-        let hyperlink = terminal.cell_hyperlink(point.row, point.col)?;
-
-        let mut start_col = point.col;
-        let mut end_col = point.col;
-
-        while start_col > rio_backend::crosswords::pos::Column(0) {
-            let prev_col = start_col - 1;
-            if terminal.cell_hyperlink(point.row, prev_col).as_ref() == Some(&hyperlink) {
-                start_col = prev_col;
-            } else {
-                break;
-            }
-        }
-        while end_col < grid.columns() - 1 {
-            let next_col = end_col + 1;
-            if terminal.cell_hyperlink(point.row, next_col).as_ref() == Some(&hyperlink) {
-                end_col = next_col;
-            } else {
-                break;
-            }
-        }
-
-        // Build a synthetic hint config so the rest of the hint
-        // pipeline (highlighting, click action) treats this just like
-        // a regex/url match.
-        let hint_config = std::rc::Rc::new(rio_backend::config::hints::Hint {
-            regex: None,
-            hyperlinks: true,
-            post_processing: true,
-            persist: false,
-            action: rio_backend::config::hints::HintAction::Action {
-                action: rio_backend::config::hints::HintInternalAction::Open,
-            },
-            mouse: rio_backend::config::hints::HintMouse::default(),
-            binding: None,
-        });
-
-        let mut uri = hyperlink.uri().to_string();
-        if hint_config.post_processing {
-            uri = post_process_hyperlink_uri(&uri);
-        }
-
-        Some(crate::hints::HintMatch {
-            text: uri,
-            start: rio_backend::crosswords::pos::Pos::new(point.row, start_col),
-            end: rio_backend::crosswords::pos::Pos::new(point.row, end_col),
-            hint: hint_config,
-        })
-    }
-
-    /// Find regex match at the specified point
-    fn find_regex_match_at_point(
-        &self,
-        terminal: &rio_backend::crosswords::Crosswords<EventProxy>,
-        point: rio_backend::crosswords::pos::Pos,
-        regex: &onig::Regex,
-        hint_config: std::rc::Rc<rio_backend::config::hints::Hint>,
-    ) -> Option<crate::hints::HintMatch> {
-        let grid = &terminal.grid;
-
-        // Check if the point is within grid bounds
-        if point.row >= grid.total_lines() as i32 || point.col.0 >= grid.columns() {
-            return None;
-        }
-
-        // Extract text from the line
-        let mut line_text = String::new();
-        for col in 0..grid.columns() {
-            let cell = &grid[point.row][rio_backend::crosswords::pos::Column(col)];
-            line_text.push(cell.c());
-        }
-        let line_text = line_text.trim_end();
-
-        // Find all matches in this line and check if point is within any of them.
-        // Onig yields (byte_start, byte_end); we slice the source ourselves.
-        for (start, end) in regex.find_iter(line_text) {
-            let start_col = rio_backend::crosswords::pos::Column(start);
-            let end_col = rio_backend::crosswords::pos::Column(end.saturating_sub(1));
-
-            // Check if the point is within this match
-            if point.col >= start_col && point.col <= end_col {
-                let original_match_text = line_text[start..end].to_string();
-                let mut match_text = original_match_text.clone();
-
-                // Apply grid-based post-processing
-                let (processed_start, processed_end) = if hint_config.post_processing {
-                    self.hint_post_processing(
-                        terminal,
-                        start_col,
-                        end_col,
-                        rio_backend::crosswords::pos::Line(point.row.0),
-                    )
-                    .unwrap_or((start_col, end_col))
-                } else {
-                    (start_col, end_col)
-                };
-
-                // Extract the processed text
-                if hint_config.post_processing {
-                    let mut processed_text = String::new();
-                    for col in processed_start.0..=processed_end.0 {
-                        let cell =
-                            &grid[point.row][rio_backend::crosswords::pos::Column(col)];
-                        processed_text.push(cell.c());
-                    }
-                    match_text = processed_text.trim_end().to_string();
-                }
-
-                return Some(crate::hints::HintMatch {
-                    text: match_text,
-                    start: rio_backend::crosswords::pos::Pos::new(
-                        point.row,
-                        processed_start,
-                    ),
-                    end: rio_backend::crosswords::pos::Pos::new(point.row, processed_end),
-                    hint: hint_config,
-                });
-            }
-        }
-
-        None
-    }
-
-    #[inline]
-    pub fn trigger_hyperlink(&self) -> bool {
-        // Check if any hyperlink hint configuration has the required modifiers active
-        let mut is_hyperlink_key_active = false;
-        for hint_config in &self.hints_config {
-            if hint_config.hyperlinks && self.modifiers_match(&hint_config.mouse.mods) {
-                is_hyperlink_key_active = true;
-                break;
-            }
-        }
-
-        if !is_hyperlink_key_active
-            || !self.context_manager.current().has_hyperlink_range()
-        {
-            return false;
-        }
-
-        // Look up the cell under the mouse and dispatch open_hyperlink
-        // if it carries an OSC 8 link.
-        let terminal = self.context_manager.current().terminal.lock();
-        let display_offset = terminal.display_offset();
-        let pos = self.mouse_position(display_offset);
-        let pos_hyperlink = terminal.cell_hyperlink(pos.row, pos.col);
-        drop(terminal);
-
-        if let Some(hyperlink) = pos_hyperlink {
-            self.open_hyperlink(hyperlink);
-            return true;
-        }
-
-        false
-    }
-
-    /// Trigger hint action at mouse position
-    #[inline]
-    pub fn trigger_hint(&mut self, clipboard: &mut Clipboard) -> bool {
-        // Take the highlighted hint
-        let hint_match = self
-            .context_manager
-            .current_mut()
-            .renderable_content
-            .highlighted_hint
-            .take();
-
-        if let Some(hint_match) = hint_match {
-            self.execute_hint_action(&hint_match, clipboard);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn open_hyperlink(&self, hyperlink: Hyperlink) {
-        // Apply post-processing to remove trailing delimiters and handle uneven brackets
-        let processed_uri = post_process_hyperlink_uri(hyperlink.uri());
-
-        self.open_with_default_handler(&processed_uri);
-    }
-
-    /// Hand `target` to the platform's default handler.
-    ///
-    /// `target` comes from terminal output, so it is attacker-controlled and
-    /// must never reach a shell: `cmd /c start` would treat `&` in a URL as a
-    /// command separator, and on Unix a launcher gets it as a single argv
-    /// entry rather than a command line.
     fn open_with_default_handler(&self, target: &str) {
         #[cfg(not(any(target_os = "macos", windows)))]
         self.exec("xdg-open", [target]);
@@ -3455,6 +3188,7 @@ impl Screen<'_> {
             self.mark_dirty();
         }
         if !is_focused {
+            self.mouse.cancel_hint_press();
             let rc = &mut self.context_manager.current_mut().renderable_content;
             if !rc.is_blinking_cursor_visible {
                 rc.is_blinking_cursor_visible = true;
@@ -4793,100 +4527,6 @@ impl Screen<'_> {
             .renderable_content
             .hint_labels = hint_labels;
     }
-
-    /// Apply grid-based hint post-processing.
-    ///
-    /// This iterates through the terminal grid character by character and adjusts
-    /// the match bounds based on bracket balance and trailing delimiters.
-    fn hint_post_processing(
-        &self,
-        terminal: &rio_backend::crosswords::Crosswords<EventProxy>,
-        start_col: rio_backend::crosswords::pos::Column,
-        end_col: rio_backend::crosswords::pos::Column,
-        row: rio_backend::crosswords::pos::Line,
-    ) -> Option<(
-        rio_backend::crosswords::pos::Column,
-        rio_backend::crosswords::pos::Column,
-    )> {
-        use rio_backend::crosswords::grid::BidirectionalIterator;
-
-        let grid = &terminal.grid;
-        let start_pos = rio_backend::crosswords::pos::Pos::new(row, start_col);
-        let end_pos = rio_backend::crosswords::pos::Pos::new(row, end_col);
-
-        let mut iter = grid.iter_from(start_pos);
-        let mut current_pos = start_pos;
-        let mut open_parents = 0;
-        let mut open_brackets = 0;
-
-        // First pass: handle uneven brackets/parentheses
-        while current_pos <= end_pos {
-            if let Some(indexed) = iter.next() {
-                let c = indexed.square.c();
-                current_pos = indexed.pos;
-
-                match c {
-                    '(' => open_parents += 1,
-                    '[' => open_brackets += 1,
-                    ')' => {
-                        if open_parents == 0 {
-                            // Unmatched closing parenthesis, truncate here
-                            if iter.prev().is_some() {
-                                return Some((start_col, iter.pos().col));
-                            }
-                            break;
-                        } else {
-                            open_parents -= 1;
-                        }
-                    }
-                    ']' => {
-                        if open_brackets == 0 {
-                            // Unmatched closing bracket, truncate here
-                            if iter.prev().is_some() {
-                                return Some((start_col, iter.pos().col));
-                            }
-                            break;
-                        } else {
-                            open_brackets -= 1;
-                        }
-                    }
-                    _ => (),
-                }
-
-                if current_pos == end_pos {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-
-        // Second pass: remove trailing delimiters
-        let mut final_end = end_pos;
-        let mut iter = grid.iter_from(end_pos);
-
-        while final_end > start_pos {
-            if let Some(indexed) = iter.next() {
-                let c = indexed.square.c();
-                if !matches!(c, '.' | ',' | ':' | ';' | '?' | '!' | '(' | '[' | '\'') {
-                    break;
-                }
-
-                if let Some(prev_indexed) = iter.prev() {
-                    final_end = prev_indexed.pos;
-                    if iter.prev().is_some() {
-                        // Move iterator back one more position for next iteration
-                    }
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-
-        Some((start_col, final_end.col))
-    }
 }
 
 /// Open `target` with whatever Windows has registered for it, without a
@@ -4918,57 +4558,6 @@ fn shell_execute_open(target: &str) {
     if code <= 32 {
         tracing::warn!("ShellExecuteW could not open {target}: code {code}");
     }
-}
-
-/// Apply post-processing to hyperlink URIs to remove trailing delimiters and handle uneven brackets.
-fn post_process_hyperlink_uri(uri: &str) -> String {
-    let chars: Vec<char> = uri.chars().collect();
-    if chars.is_empty() {
-        return String::new();
-    }
-
-    let mut end_idx = chars.len() - 1;
-    let mut open_parents = 0;
-    let mut open_brackets = 0;
-
-    // First pass: handle uneven brackets/parentheses
-    for (i, &c) in chars.iter().enumerate() {
-        match c {
-            '(' => open_parents += 1,
-            '[' => open_brackets += 1,
-            ')' => {
-                if open_parents == 0 {
-                    // Unmatched closing parenthesis, truncate here
-                    end_idx = i.saturating_sub(1);
-                    break;
-                } else {
-                    open_parents -= 1;
-                }
-            }
-            ']' => {
-                if open_brackets == 0 {
-                    // Unmatched closing bracket, truncate here
-                    end_idx = i.saturating_sub(1);
-                    break;
-                } else {
-                    open_brackets -= 1;
-                }
-            }
-            _ => (),
-        }
-    }
-
-    // Second pass: remove trailing delimiters
-    while end_idx > 0 {
-        match chars[end_idx] {
-            '.' | ',' | ':' | ';' | '?' | '!' | '(' | '[' | '\'' => {
-                end_idx = end_idx.saturating_sub(1);
-            }
-            _ => break,
-        }
-    }
-
-    chars.into_iter().take(end_idx + 1).collect()
 }
 
 #[cfg(test)]
@@ -5006,62 +4595,5 @@ mod tests {
             at: std::time::Instant::now() - crate::constants::MULTI_CLICK_THRESHOLD * 2,
         };
         assert!(!stale.validates_double_click(origin));
-    }
-
-    #[test]
-    fn test_post_process_hyperlink_uri() {
-        // Test removing trailing parenthesis
-        assert_eq!(
-            post_process_hyperlink_uri("https://example.com)"),
-            "https://example.com"
-        );
-
-        // Test removing trailing comma
-        assert_eq!(
-            post_process_hyperlink_uri("https://example.com,"),
-            "https://example.com"
-        );
-
-        // Test removing trailing period
-        assert_eq!(
-            post_process_hyperlink_uri("https://example.com."),
-            "https://example.com"
-        );
-
-        // Test handling balanced parentheses (should keep them)
-        assert_eq!(
-            post_process_hyperlink_uri("https://example.com/path(with)parens"),
-            "https://example.com/path(with)parens"
-        );
-
-        // Test handling unbalanced parentheses
-        assert_eq!(
-            post_process_hyperlink_uri("https://example.com/path)"),
-            "https://example.com/path"
-        );
-
-        // Test handling multiple trailing delimiters
-        assert_eq!(
-            post_process_hyperlink_uri("https://example.com.'),"),
-            "https://example.com"
-        );
-
-        // Test markdown-style URLs
-        assert_eq!(
-            post_process_hyperlink_uri("https://example.com)"),
-            "https://example.com"
-        );
-
-        // Test handling unbalanced brackets
-        assert_eq!(
-            post_process_hyperlink_uri("https://example.com/path]"),
-            "https://example.com/path"
-        );
-
-        // Test balanced brackets (should keep them)
-        assert_eq!(
-            post_process_hyperlink_uri("https://example.com/path[with]brackets"),
-            "https://example.com/path[with]brackets"
-        );
     }
 }

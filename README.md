@@ -3,7 +3,7 @@
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only
-four behavioral deltas:
+five behavioral deltas:
 
 - Alternate-screen `CSI 2 J` clears obsolete direct Kitty placements. Remove
   this when upstream preserves the same main-screen scrollback boundary.
@@ -17,9 +17,22 @@ four behavioral deltas:
   and remains authoritative across config reloads. Remove this when upstream
   exposes an equivalent launch override.
 
+- Native hints share Unicode-aware grid spans across mouse and keyboard input,
+  follow terminal soft wraps, preserve configured OSC 8 actions and URI fields,
+  and refresh hover feedback on modifier changes. Linux defaults to Ctrl-click;
+  macOS retains Super-click. Link presses own their release ahead of application
+  mouse reporting, and drags or stale targets cancel activation. Remove this
+  delta when upstream provides the same matching and gesture behavior, with the
+  accepted modifier available through native configuration.
+
 Nova consumes exact commits rather than a moving branch. The `rio` executable,
-crates, configuration schema, and all behavior outside these four deltas remain
+crates, configuration schema, and all behavior outside these five deltas remain
 upstream-owned. Mars features and Yazelix Cursors are intentionally absent.
+
+The hyperlink mechanism was reviewed against upstream `b2e7c38` and historical
+Mars commits `2177a794e7` (matching) and `9dc93ee46e` (paired click ownership).
+Rio's native hints, grid text/wrap helpers, and structured platform opener remain
+the owners; no Mars input subsystem or shell launcher is imported.
 
 ## Upstream Rio
 

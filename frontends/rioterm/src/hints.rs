@@ -24,7 +24,7 @@ pub struct HintState {
 }
 
 /// A match found by a hint
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HintMatch {
     /// The text that was matched
     pub text: String,
@@ -84,17 +84,7 @@ impl HintState {
             }
         };
 
-        // Find regex matches if regex is specified
-        if let Some(regex_pattern) = &hint.regex {
-            if let Ok(regex) = onig::Regex::new(regex_pattern) {
-                self.find_regex_matches(term, &regex, hint.clone());
-            }
-        }
-
-        // Find OSC 8 hyperlinks if enabled
-        if hint.hyperlinks {
-            self.find_hyperlink_matches(term, hint.clone());
-        }
+        self.find_matches(term, hint);
 
         // Cancel hint mode if no matches found
         if self.matches.is_empty() {
@@ -207,43 +197,49 @@ impl HintState {
         regex: &onig::Regex,
         hint: Rc<Hint>,
     ) {
-        // Get the visible area of the terminal
+        use rio_backend::crosswords::square::Wide;
         let grid = &term.grid;
-        let display_offset = grid.display_offset();
-        let visible_lines = grid.screen_lines();
-
-        // Scan each visible line for matches
-        for line_idx in 0..visible_lines {
-            let line = Line(line_idx as i32 - display_offset as i32);
-            if line < Line(0) || line.0 >= grid.total_lines() as i32 {
-                continue;
-            }
-
-            // Extract text from the line
-            let line_text = self.extract_line_text(term, line);
-
-            // Find all matches in this line. Onig yields (byte_start, byte_end);
-            for (start, end) in regex.find_iter(&line_text) {
-                let start_col = Column(line_text[..start].chars().count());
-                let mut match_text = line_text[start..end].to_string();
-
-                // Apply post-processing if enabled
-                if hint.post_processing {
-                    match_text = post_process_hyperlink_uri(&match_text);
+        let mut row = term
+            .line_search_left(Pos::new(Line(-(grid.display_offset() as i32)), Column(0)))
+            .row;
+        let visible_end = Line(grid.screen_lines() as i32 - grid.display_offset() as i32);
+        while row < visible_end {
+            let last_row = term.line_search_right(Pos::new(row, Column(0))).row;
+            let mut text = String::new();
+            let mut positions = Vec::new();
+            for line in row.0..=last_row.0 {
+                for col in 0..grid.columns() {
+                    let pos = Pos::new(Line(line), Column(col));
+                    if matches!(grid[pos].wide(), Wide::Spacer | Wide::LeadingSpacer) {
+                        continue;
+                    }
+                    for c in grid.cell_text(pos) {
+                        text.push(c);
+                        // Onig returns bytes; every byte maps back to its painted cell.
+                        positions.extend(std::iter::repeat_n(pos, c.len_utf8()));
+                    }
                 }
-
-                let end_col =
-                    Column(start_col.0 + match_text.chars().count().saturating_sub(1));
-
-                let hint_match = HintMatch {
-                    text: match_text,
-                    start: Pos::new(line, start_col),
-                    end: Pos::new(line, end_col),
-                    hint: hint.clone(),
-                };
-
-                self.matches.push(hint_match);
             }
+            for (start, end) in regex.find_iter(text.trim_end()) {
+                let mut target = text[start..end].to_owned();
+                if hint.post_processing {
+                    target = post_process_hyperlink_uri(&target);
+                }
+                if target.is_empty() {
+                    continue;
+                }
+                let mut last = positions[start + target.len() - 1];
+                if grid[last].wide() == Wide::Wide {
+                    last.col += 1;
+                }
+                self.matches.push(HintMatch {
+                    text: target,
+                    start: positions[start],
+                    end: last,
+                    hint: hint.clone(),
+                });
+            }
+            row = last_row + 1;
         }
     }
 
@@ -266,7 +262,7 @@ impl HintState {
 
         for line_idx in 0..visible_lines {
             let line = Line(line_idx as i32 - display_offset as i32);
-            if line < Line(0) || line.0 >= grid.total_lines() as i32 {
+            if line < grid.topmost_line() || line > grid.bottommost_line() {
                 continue;
             }
 
@@ -297,6 +293,10 @@ impl HintState {
                     if hint.post_processing {
                         uri = post_process_hyperlink_uri(&uri);
                     }
+                    if uri.is_empty() {
+                        col = end_col;
+                        continue;
+                    }
                     self.matches.push(HintMatch {
                         text: uri,
                         start: Pos::new(line, Column(start_col)),
@@ -310,20 +310,33 @@ impl HintState {
         }
     }
 
-    fn extract_line_text<T: EventListener>(
-        &self,
+    /// Mouse and keyboard hints use the same native match and action owners.
+    pub fn at_point<T: EventListener>(
         term: &rio_backend::crosswords::Crosswords<T>,
-        line: Line,
-    ) -> String {
-        let grid = &term.grid;
-        let mut text = String::new();
+        hint: Rc<Hint>,
+        point: Pos,
+    ) -> Option<HintMatch> {
+        let mut state = Self::new(String::new());
+        state.find_matches(term, hint);
+        state
+            .matches
+            .into_iter()
+            .find(|m| m.start <= point && point <= m.end)
+    }
 
-        for col in 0..grid.columns() {
-            let cell = &grid[line][Column(col)];
-            text.push(cell.c());
+    fn find_matches<T: EventListener>(
+        &mut self,
+        term: &rio_backend::crosswords::Crosswords<T>,
+        hint: Rc<Hint>,
+    ) {
+        if hint.hyperlinks {
+            self.find_hyperlink_matches(term, hint.clone());
         }
-
-        text.trim_end().to_string()
+        if let Some(pattern) = &hint.regex {
+            if let Ok(regex) = onig::Regex::new(pattern) {
+                self.find_regex_matches(term, &regex, hint);
+            }
+        }
     }
 
     fn generate_labels(&mut self) {
@@ -473,61 +486,176 @@ pub fn resolve_path_for_opening(text: &str, cwd: Option<&Path>) -> Option<PathBu
     }
 }
 
-/// Apply post-processing to hyperlink URIs (same as in screen/mod.rs)
+/// Trim only a suffix so match text and grid bounds retain the same owner.
 fn post_process_hyperlink_uri(uri: &str) -> String {
-    let chars: Vec<char> = uri.chars().collect();
-    if chars.is_empty() {
-        return String::new();
-    }
-
-    let mut end_idx = chars.len() - 1;
-    let mut open_parents = 0;
-    let mut open_brackets = 0;
-
-    // First pass: handle uneven brackets/parentheses
-    for (i, &c) in chars.iter().enumerate() {
+    let mut end = uri.len();
+    let (mut parens, mut brackets) = (0, 0);
+    for (i, c) in uri.char_indices() {
         match c {
-            '(' => open_parents += 1,
-            '[' => open_brackets += 1,
-            ')' => {
-                if open_parents == 0 {
-                    // Unmatched closing parenthesis, truncate here
-                    end_idx = i.saturating_sub(1);
-                    break;
-                } else {
-                    open_parents -= 1;
-                }
+            '(' => parens += 1,
+            '[' => brackets += 1,
+            ')' if parens == 0 => {
+                end = i;
+                break;
             }
-            ']' => {
-                if open_brackets == 0 {
-                    // Unmatched closing bracket, truncate here
-                    end_idx = i.saturating_sub(1);
-                    break;
-                } else {
-                    open_brackets -= 1;
-                }
+            ']' if brackets == 0 => {
+                end = i;
+                break;
             }
+            ')' => parens -= 1,
+            ']' => brackets -= 1,
             _ => (),
         }
     }
-
-    // Second pass: remove trailing delimiters
-    while end_idx > 0 {
-        match chars[end_idx] {
-            '.' | ',' | ':' | ';' | '?' | '!' | '(' | '[' | '\'' => {
-                end_idx = end_idx.saturating_sub(1);
-            }
-            _ => break,
-        }
-    }
-
-    chars.into_iter().take(end_idx + 1).collect()
+    uri[..end]
+        .trim_end_matches(['.', ',', ':', ';', '?', '!', '(', '[', '\''])
+        .to_owned()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use rio_backend::config::hints::{HintAction, HintInternalAction};
+
+    #[test]
+    fn terminal_url_targets_and_spans() {
+        use rio_backend::ansi::CursorShape;
+        use rio_backend::crosswords::{Crosswords, CrosswordsSize};
+        use rio_backend::event::VoidListener;
+        use rio_backend::event::WindowId;
+        use rio_backend::performer::handler::Processor;
+        let hint = Rc::new(rio_backend::config::hints::Hints::default().rules[0].clone());
+        for (input, target, start, end) in [
+            (
+                "https://example.com",
+                "https://example.com",
+                (0, 0),
+                (0, 18),
+            ),
+            (
+                "➜ Local: http://localhost:4321/",
+                "http://localhost:4321/",
+                (0, 9),
+                (0, 30),
+            ),
+            (
+                "界e\u{301} http://127.0.0.1:3000/",
+                "http://127.0.0.1:3000/",
+                (0, 4),
+                (0, 25),
+            ),
+            (
+                "HTTP://localhost:4321/",
+                "HTTP://localhost:4321/",
+                (0, 0),
+                (0, 21),
+            ),
+            (
+                "https://example.com/a/very/long/wrapped/path",
+                "https://example.com/a/very/long/wrapped/path",
+                (0, 0),
+                (1, 11),
+            ),
+            (
+                "(https://example.com).",
+                "https://example.com",
+                (0, 1),
+                (0, 19),
+            ),
+        ] {
+            let mut term = Crosswords::new(
+                CrosswordsSize::new(32, 5),
+                CursorShape::Block,
+                VoidListener,
+                WindowId::from(0),
+                0,
+                100,
+            );
+            let mut parser = Processor::default();
+            parser.advance(&mut term, input.as_bytes());
+            let mut state = HintState::new("abc".into());
+            state.start(hint.clone());
+            state.update_matches(&term);
+            assert_eq!(
+                state
+                    .matches
+                    .iter()
+                    .map(|m| m.text.as_str())
+                    .collect::<Vec<_>>(),
+                [target],
+                "{input}"
+            );
+            assert_eq!(
+                state.matches[0].start,
+                Pos::new(Line(start.0), Column(start.1)),
+                "{input}"
+            );
+            assert_eq!(
+                HintState::at_point(&term, hint.clone(), state.matches[0].start).as_ref(),
+                state.matches.first()
+            );
+            assert_eq!(
+                HintState::at_point(&term, hint.clone(), state.matches[0].end).as_ref(),
+                state.matches.first()
+            );
+            assert_eq!(
+                state.matches[0].end,
+                Pos::new(Line(end.0), Column(end.1)),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn osc_actions_and_inert_text() {
+        use rio_backend::ansi::CursorShape;
+        use rio_backend::crosswords::{Crosswords, CrosswordsSize};
+        use rio_backend::event::VoidListener;
+        use rio_backend::event::WindowId;
+        use rio_backend::performer::handler::Processor;
+        let mut term = Crosswords::new(
+            CrosswordsSize::new(100, 5),
+            CursorShape::Block,
+            VoidListener,
+            WindowId::from(0),
+            0,
+            100,
+        );
+        let mut rule = rio_backend::config::hints::Hints::default().rules[0].clone();
+        rule.action = HintAction::Action {
+            action: HintInternalAction::Copy,
+        };
+        rule.post_processing = false;
+        let hint = Rc::new(rule);
+        let uri = "https://example.com/?q=$(touch${IFS}/tmp/never)&x=1;";
+        let mut parser = Processor::default();
+        parser.advance(
+            &mut term,
+            format!("\x1b]8;;{uri}\x07e\u{301} link\x1b]8;;\x07").as_bytes(),
+        );
+        let found =
+            HintState::at_point(&term, hint.clone(), Pos::new(Line(0), Column(2)))
+                .unwrap();
+        assert_eq!(found.text, uri);
+        assert!(Rc::ptr_eq(&found.hint, &hint));
+        assert_eq!(found.start, Pos::new(Line(0), Column(0)));
+        assert_eq!(found.end, Pos::new(Line(0), Column(5)));
+        for input in [
+            "abchttp://localhost:3000",
+            "localhost:3000",
+            "127.0.0.1:3000",
+            ".,;!?()[]'",
+        ] {
+            parser.advance(&mut term, format!("\x1b[2J\x1b[H{input}").as_bytes());
+            let mut state = HintState::new("abc".into());
+            state.start(hint.clone());
+            state.update_matches(&term);
+            assert!(state.matches.is_empty(), "{input}: {:?}", state.matches);
+        }
+        for input in ["", ".", ",", ")", "]", ":", ";", "?", "!", "(", "[", "'"] {
+            assert!(post_process_hyperlink_uri(input).is_empty(), "{input}");
+        }
+    }
 
     #[test]
     fn test_label_generator() {

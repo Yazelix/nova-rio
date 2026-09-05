@@ -18,6 +18,7 @@ pub struct AccumulatedScroll {
 
 #[derive(Debug)]
 pub struct Mouse {
+    pub hint_press: Option<HintPress>,
     pub multiplier: f64,
     pub divider: f64,
     pub left_button_state: ElementState,
@@ -45,9 +46,17 @@ pub struct Mouse {
     pub last_cell: Option<Pos>,
 }
 
+/// A consumed press still owns its release after cancellation.
+#[derive(Debug)]
+pub struct HintPress {
+    pub origin: Pos,
+    pub target: Option<crate::hints::HintMatch>,
+}
+
 impl Default for Mouse {
     fn default() -> Mouse {
         Mouse {
+            hint_press: None,
             multiplier: 3.0,
             divider: 1.0,
             last_click_timestamp: Instant::now(),
@@ -74,6 +83,22 @@ impl Mouse {
             multiplier,
             divider,
             ..Default::default()
+        }
+    }
+
+    pub fn cancel_hint_press(&mut self) {
+        if let Some(press) = &mut self.hint_press {
+            press.target = None;
+        }
+    }
+
+    pub fn move_hint_press(&mut self, point: Pos) {
+        if self
+            .hint_press
+            .as_ref()
+            .is_some_and(|press| press.origin != point)
+        {
+            self.cancel_hint_press();
         }
     }
 

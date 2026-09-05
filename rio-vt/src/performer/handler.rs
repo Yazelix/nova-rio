@@ -1104,8 +1104,11 @@ impl<U: Handler> Perform for Performer<'_, U> {
 
             // Hyperlink.
             b"8" if params.len() > 2 => {
+                // Only the first two semicolons delimit OSC 8 fields; the URI
+                // may itself contain semicolons.
+                let uri = params[2..].join(&b';');
                 self.handler
-                    .set_hyperlink(osc::parse_hyperlink(params[1], params[2]));
+                    .set_hyperlink(osc::parse_hyperlink(params[1], &uri));
             }
 
             // OSC 9;4 progress; OSC 9 desktop notification fallback.

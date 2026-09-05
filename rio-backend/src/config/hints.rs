@@ -5,12 +5,13 @@ pub const DEFAULT_HINTS_ALPHABET: &str = "jfkdls;ahgurieowpq";
 
 /// Default URL/path regex pattern.
 ///
-/// Ported verbatim from ghostty's `src/config/url.zig`. Requires a regex
+/// Based on ghostty's `src/config/url.zig`. Requires a regex
 /// engine with lookbehind support — rio uses oniguruma via the `onig`
 /// crate. Three alternations:
 ///
 /// 1. **Schemed URLs** — `http://`, `https://`, `mailto:`, `file:`, `ssh:`,
-///    `magnet:`, `ipfs://`, `gemini://`, etc. IPv6 literals supported.
+///    `magnet:`, `ipfs://`, `gemini://`, etc. Schemes are case-insensitive,
+///    cannot start inside a word, and support IPv6 literals.
 ///    Trailing `.` / `,` and unbalanced parens are excluded via lookbehind.
 /// 2. **Rooted or explicitly-relative paths** — `/abs`, `./rel`, `../rel`,
 ///    `~/x`, `.hidden/x`, `$VAR/x`. Each prefix is guarded by lookbehinds
@@ -21,7 +22,7 @@ pub const DEFAULT_HINTS_ALPHABET: &str = "jfkdls;ahgurieowpq";
 ///    required, and lookbehinds prevent matching mid-word starts.
 pub const DEFAULT_URL_REGEX: &str = concat!(
  // schemed URLs
-    "(?:https?://|mailto:|ftp://|file:|ssh:|git://|ssh://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:)",
+    "(?<!\\w)(?i:https?://|mailto:|ftp://|file:|ssh:|git://|ssh://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:)",
     "(?:",
         r"(?:\[[:0-9a-fA-F]+(?:[:0-9a-fA-F]*)+\](?::[0-9]+)?)",
         "|",
@@ -235,7 +236,10 @@ impl Default for HintMouse {
         #[cfg(target_os = "macos")]
         let default_mods = vec!["Super".to_string()];
 
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "linux")]
+        let default_mods = vec!["Control".to_string()];
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         let default_mods = vec!["Alt".to_string()];
 
         Self {

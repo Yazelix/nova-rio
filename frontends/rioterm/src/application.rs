@@ -1210,12 +1210,20 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
 
             WindowEvent::ModifiersChanged(modifiers) => {
                 route.window.screen.set_modifiers(modifiers);
+                if route.path == RoutePath::Terminal
+                    && !route.window.screen.mouse.on_border
+                {
+                    let cursor = route.window.screen.hint_cursor();
+                    route.window.winit_window.set_cursor(cursor);
+                    route.request_redraw();
+                }
             }
 
             WindowEvent::MouseInput { state, button, .. } => {
                 if route.path != RoutePath::Terminal
                     || route.window.screen.renderer.confirm_quit.is_active()
                 {
+                    route.window.screen.mouse.cancel_hint_press();
                     #[cfg(target_os = "macos")]
                     if state == ElementState::Pressed
                         && button == MouseButton::Left
@@ -1250,7 +1258,10 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
 
                 match button {
                     MouseButton::Left => {
-                        route.window.screen.mouse.left_button_state = state
+                        route.window.screen.mouse.left_button_state = state;
+                        if state == ElementState::Pressed {
+                            route.window.screen.mouse.hint_press = None;
+                        }
                     }
                     MouseButton::Middle => {
                         route.window.screen.mouse.middle_button_state = state
@@ -1394,6 +1405,11 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
                         // of mouse mode (e.g. neovim capturing clicks).
                         if route.window.screen.select_current_based_on_mouse() {
                             route.request_redraw();
+                        } else if button == MouseButton::Left
+                            && route.window.screen.prepare_hint_click()
+                        {
+                            route.request_redraw();
+                            return;
                         } else if !route.window.screen.modifiers.state().shift_key()
                             && route.window.screen.mouse_mode()
                         {
@@ -1420,10 +1436,6 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
                                 &mut self.router.clipboard,
                             );
                         } else {
-                            if route.window.screen.trigger_hyperlink() {
-                                return;
-                            }
-
                             // Load mouse point, treating message bar and padding as the closest square.
                             let display_offset = route.window.screen.display_offset();
 
@@ -1444,6 +1456,15 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
                             .process_mouse_bindings(button, &mut self.router.clipboard);
                     }
                     ElementState::Released => {
+                        if button == MouseButton::Left
+                            && route
+                                .window
+                                .screen
+                                .finish_hint_click(&mut self.router.clipboard)
+                        {
+                            route.request_redraw();
+                            return;
+                        }
                         // Stop selection auto-scroll on button release.
                         if let MouseButton::Left | MouseButton::Right = button {
                             let scroll_timer_id =
@@ -1500,18 +1521,8 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
                             return;
                         }
 
-                        // Releasing a drag selection copies it (with
-                        // copy-on-select) and must not activate a hint
-                        // sitting under the release point; hints fire on
-                        // plain clicks only, when no selection exists.
-                        if route.window.screen.selection_is_empty() {
-                            if button == MouseButton::Left {
-                                route
-                                    .window
-                                    .screen
-                                    .trigger_hint(&mut self.router.clipboard);
-                            }
-                        } else if matches!(button, MouseButton::Left | MouseButton::Right)
+                        if !route.window.screen.selection_is_empty()
+                            && matches!(button, MouseButton::Left | MouseButton::Right)
                             && self.config.copy_on_select
                         {
                             route.window.screen.copy_selection(
@@ -1524,6 +1535,10 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
             }
 
             WindowEvent::CursorLeft { .. } => {
+                route.window.screen.mouse.cancel_hint_press();
+                route.window.screen.mouse.inside_text_area = false;
+                route.window.screen.update_highlighted_hints();
+                route.request_redraw();
                 if route.window.screen.clear_close_button_hover() {
                     route.request_redraw();
                 }
@@ -1545,6 +1560,11 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
                 route.window.screen.mouse.x = x;
                 route.window.screen.mouse.y = y;
                 route.window.screen.mouse.raw_y = position.y;
+                let point = route
+                    .window
+                    .screen
+                    .mouse_position(route.window.screen.display_offset());
+                route.window.screen.mouse.move_hint_press(point);
 
                 if route.path != RoutePath::Terminal
                     || route.window.screen.renderer.confirm_quit.is_active()
@@ -1802,41 +1822,16 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
                     && (route.window.screen.modifiers.state().shift_key()
                         || !route.window.screen.mouse_mode());
 
-                if !is_selecting && route.window.screen.update_highlighted_hints() {
-                    route.window.winit_window.set_cursor(CursorIcon::Pointer);
-                    route.window.screen.context_manager.request_render();
-                } else if !is_selecting {
-                    let cursor_icon =
-                        if !route.window.screen.modifiers.state().shift_key()
-                            && route.window.screen.mouse_mode()
-                        {
-                            CursorIcon::Default
-                        } else {
-                            CursorIcon::Text
-                        };
-
-                    route.window.winit_window.set_cursor(cursor_icon);
-
-                    // In case hyperlink range has cleaned trigger one more render
-                    if route
-                        .window
-                        .screen
-                        .context_manager
-                        .current()
-                        .has_hyperlink_range()
-                    {
-                        route
-                            .window
-                            .screen
-                            .context_manager
-                            .current_mut()
-                            .set_hyperlink_range(None);
-                        route.window.screen.context_manager.request_render();
-                    }
-                }
-
                 route.window.screen.mouse.inside_text_area = inside_text_area;
                 route.window.screen.mouse.square_side = square_side;
+                if route.window.screen.mouse.hint_press.is_some() {
+                    return;
+                }
+                if !is_selecting {
+                    let cursor = route.window.screen.hint_cursor();
+                    route.window.winit_window.set_cursor(cursor);
+                    route.window.screen.context_manager.request_render();
+                }
 
                 if is_selecting {
                     route.window.screen.update_selection(point, square_side);

@@ -3,7 +3,7 @@
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only
-seven behavioral deltas:
+eight behavioral deltas:
 
 - Alternate-screen `CSI 2 J` clears obsolete direct Kitty placements. Remove
   this when upstream preserves the same main-screen scrollback boundary.
@@ -35,8 +35,21 @@ seven behavioral deltas:
   remain authoritative. Remove this delta when upstream passes the same
   chunk-boundary regression, including split Unicode and frame markers.
 
+- `--config-editor` validates TOML from stdin without loading assets or opening a
+  window, then prints a version-1 TOML inventory of eight common global settings.
+  Defaults and accepted blur choices come from native config types; the complete
+  native parser validates each candidate. Platform overrides retain precedence.
+  This is RIO-CONFIG-UI-001, consumed by Nova Ratconfig. It is a finite editor
+  surface, not a complete schema or an asset-availability check. Remove this
+  delta when upstream provides an equivalent headless inventory and validator.
+
+The config-editor mechanism was reviewed against upstream `b2e7c38` and
+`6b0f5c8a`: the existing `--write-config` writes a file but provides no editor
+inventory or candidate validation. No dependencies or config defaults change.
+Run its contract with `cargo test -p rio-backend -p rioterm --features rioterm/wgpu config_editor_uses_native_defaults_and_validation`.
+
 Nova consumes exact commits rather than a moving branch. The `rio` executable,
-crates, configuration schema, and all behavior outside these seven deltas remain
+crates, configuration schema, and all behavior outside these eight deltas remain
 upstream-owned. Mars features and Yazelix Cursors are intentionally absent.
 
 The hyperlink mechanism was reviewed against upstream `b2e7c38` and historical

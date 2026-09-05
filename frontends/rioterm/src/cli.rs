@@ -9,6 +9,10 @@ use std::path::PathBuf;
 #[derive(Parser, Default, Debug)]
 #[clap(author, about, version)]
 pub struct Cli {
+    /// Validate TOML from stdin and print the versioned native editor inventory.
+    #[clap(long, conflicts_with_all = ["write_config", "command"])]
+    pub config_editor: bool,
+
     /// Options which can be passed via IPC.
     #[clap(flatten)]
     pub window_options: WindowOptions,

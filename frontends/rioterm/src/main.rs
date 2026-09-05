@@ -148,6 +148,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load command line options.
     let args = cli::Cli::parse();
 
+    if args.config_editor {
+        let raw = std::io::read_to_string(std::io::stdin())?;
+        print!("{}", rio_backend::config::editor::describe(&raw)?);
+        return Ok(());
+    }
+
     let write_config_path = args.window_options.terminal_options.write_config.clone();
     if let Some(config_path) = write_config_path {
         let _ = setup_logs_by_filter_level("TRACE", false);

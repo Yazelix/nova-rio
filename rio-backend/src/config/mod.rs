@@ -4,6 +4,8 @@ pub mod bindings;
 // so `rio_backend::config::{colors, ConfigError}` keep resolving.
 pub use rio_vt::config::{colors, ConfigError};
 pub mod defaults;
+#[cfg(feature = "renderer")]
+pub mod editor;
 pub mod effects;
 pub mod hints;
 pub mod keyboard;

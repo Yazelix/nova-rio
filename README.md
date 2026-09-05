@@ -3,7 +3,7 @@
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only
-six behavioral deltas:
+seven behavioral deltas:
 
 - Alternate-screen `CSI 2 J` clears obsolete direct Kitty placements. Remove
   this when upstream preserves the same main-screen scrollback boundary.
@@ -30,8 +30,13 @@ six behavioral deltas:
   New animations request frames until they settle. Remove this delta when
   upstream passes the same hidden-cursor and idle-animation regressions.
 
+- Synchronized updates buffer drawing immediately after the begin marker,
+  including payload in the same PTY read. The existing timeout and size bounds
+  remain authoritative. Remove this delta when upstream passes the same
+  chunk-boundary regression, including split Unicode and frame markers.
+
 Nova consumes exact commits rather than a moving branch. The `rio` executable,
-crates, configuration schema, and all behavior outside these six deltas remain
+crates, configuration schema, and all behavior outside these seven deltas remain
 upstream-owned. Mars features and Yazelix Cursors are intentionally absent.
 
 The hyperlink mechanism was reviewed against upstream `b2e7c38` and historical
@@ -45,6 +50,8 @@ with Yazi and timing-stressed Codex through Nova Zellij. Run the regression with
 with `python3 misc/scripts/test-cursor-trail.py` in the installed terminal.
 Hidden phases must show no cursor; revealing it must not animate from the hidden
 position, and visible moves must settle while terminal output is idle.
+Synchronized repaint phases must keep the visible cursor steady. Their parser
+regression is `cargo test -p rio-vt sync_update_buffers_payload`.
 
 ## Upstream Rio
 

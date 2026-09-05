@@ -596,14 +596,21 @@ impl Processor {
             // the deadline itself and never reach this branch.
             if self.state.sync_state.timeout.expired() {
                 self.stop_sync(handler);
-                let mut performer = Performer::new(&mut self.state, handler);
-                self.parser.advance(&mut performer, bytes);
             } else {
                 self.advance_sync(handler, bytes);
+                return;
             }
-        } else {
+        }
+
+        let consumed = {
             let mut performer = Performer::new(&mut self.state, handler);
-            self.parser.advance(&mut performer, bytes);
+            self.parser
+                .advance_until(&mut performer, bytes, |performer| {
+                    performer.state.sync_state.timeout.pending_timeout()
+                })
+        };
+        if consumed < bytes.len() {
+            self.advance_sync(handler, &bytes[consumed..]);
         }
     }
 
@@ -2289,6 +2296,24 @@ mod tests {
         assert_eq!(handler.printed, "hidden");
         assert!(processor.sync_timeout().sync_timeout().is_none());
         assert_eq!(processor.sync_bytes_count(), 0);
+    }
+
+    #[test]
+    fn sync_update_buffers_payload_regardless_of_begin_chunk_boundary() {
+        let input = "before λ\x1b[?2026hinside 🦀".as_bytes();
+        for split in 0..=input.len() {
+            let mut handler = SyncHandler::default();
+            let mut processor = Processor::default();
+
+            processor.advance(&mut handler, &input[..split]);
+            processor.advance(&mut handler, &input[split..]);
+            assert_eq!(handler.printed, "before λ", "split at {split}");
+
+            processor.advance(&mut handler, b"\x1b[?2026lafter");
+            assert_eq!(handler.printed, "before λinside 🦀after");
+            assert!(processor.sync_timeout().sync_timeout().is_none());
+            assert_eq!(processor.sync_bytes_count(), 0);
+        }
     }
 
     #[test]

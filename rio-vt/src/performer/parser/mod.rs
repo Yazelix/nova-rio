@@ -138,6 +138,17 @@ impl Parser {
     /// Requires a [`Perform`] implementation to handle the triggered actions.
     #[inline]
     pub fn advance<P: Perform>(&mut self, performer: &mut P, bytes: &[u8]) {
+        self.advance_until(performer, bytes, |_| false);
+    }
+
+    /// Stop after an action requests it, returning the number of consumed bytes.
+    #[inline]
+    pub(super) fn advance_until<P: Perform>(
+        &mut self,
+        performer: &mut P,
+        bytes: &[u8],
+        stop: impl Fn(&P) -> bool,
+    ) -> usize {
         let mut i = 0;
 
         // Handle partial codepoints from previous calls to `advance`.
@@ -145,7 +156,7 @@ impl Parser {
             i += self.advance_partial_utf8(performer, bytes);
         }
 
-        while i != bytes.len() {
+        while i != bytes.len() && !stop(performer) {
             match self.state {
                 State::Ground => i += self.advance_ground(performer, &bytes[i..]),
                 State::CsiParam => {
@@ -159,6 +170,7 @@ impl Parser {
                 }
             }
         }
+        i
     }
 
     /// Consume a run of bytes while in `CsiParam`, accumulating digit

@@ -23,6 +23,12 @@ try:
     for column in (1, columns):
         pause("Hidden cursor: no trail", f"\x1b[?25l\x1b[{rows // 2};{column}H")
         pause("Visible again: no trail from the border", center + "\x1b[?25h")
+    pause("Synchronized repaint: cursor stays visible", center + "\x1b[?25h")
+    for column in (1, columns) * 4:
+        emit(f"\x1b[?2026h\x1b[?25l\x1b[{rows // 2};{column}H")
+        time.sleep(0.075)
+        emit(center + "\x1b[?25h\x1b[?2026l")
+        time.sleep(0.075)
     for column in (1, columns):
         pause("Visible movement: trail settles while idle", f"\x1b[{rows // 2};{column}H")
         pause("Visible return: trail settles while idle", center)

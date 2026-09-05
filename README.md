@@ -39,14 +39,12 @@ Mars commits `2177a794e7` (matching) and `9dc93ee46e` (paired click ownership).
 Rio's native hints, grid text/wrap helpers, and structured platform opener remain
 the owners; no Mars input subsystem or shell launcher is imported.
 
-The cursor-trail correction was reproduced against that same exact upstream
-baseline, both directly and through Nova Zellij with Yazi and timing-stressed
-Codex output. It reuses Rio's cursor policy and spring state without changing
-application protocols or disabling animation. Run the deterministic regression
-with `cargo test -p rioterm --features wgpu hidden_trail_restarts` and the
-installed-terminal probe with `python3 misc/scripts/test-cursor-trail.py`.
-The probe must show no cursor during hidden phases, snap to the visible position
-on return, and let visible moves settle while terminal output is idle.
+Upstream `b2e7c38` reproduces the hidden-cursor defect. The fork was also checked
+with Yazi and timing-stressed Codex through Nova Zellij. Run the regression with
+`cargo test -p rioterm --features wgpu hidden_trail_restarts` and the visual probe
+with `python3 misc/scripts/test-cursor-trail.py` in the installed terminal.
+Hidden phases must show no cursor; revealing it must not animate from the hidden
+position, and visible moves must settle while terminal output is idle.
 
 ## Upstream Rio
 

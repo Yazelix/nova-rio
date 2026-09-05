@@ -3545,28 +3545,44 @@ impl Screen<'_> {
 
                 let current = self.context_manager.current();
                 let cursor = &current.renderable_content.cursor;
-                let cursor_row = cursor.state.pos.row.0 as usize;
-                let cursor_col = cursor.state.pos.col.0;
-
-                // Cursor position in physical pixels.
-                let cursor_px_x = origin_x + cursor_col as f32 * cell_width;
-                let cursor_px_y = origin_y + cursor_row as f32 * cell_height;
-
-                self.renderer.trail_cursor.set_route(current.route_id);
-                self.renderer.trail_cursor.set_destination(
-                    cursor_px_x,
-                    cursor_px_y,
-                    cell_width,
-                    cell_height,
+                let render_style = crate::grid_emit::cursor_render_style(
+                    crate::grid_emit::CursorRenderInputs {
+                        visible: cursor.state.is_visible(),
+                        focused: self.renderer.is_window_focused,
+                        blink_visible: current
+                            .renderable_content
+                            .is_blinking_cursor_visible,
+                        blinking: current.renderable_content.has_blinking_enabled,
+                        preedit: current.ime.preedit().is_some(),
+                        shape: cursor.state.content,
+                    },
                 );
-                self.renderer.trail_cursor.animate(cell_width, cell_height);
+                if render_style.is_some() && self.renderer.is_window_focused {
+                    let cursor_row = cursor.state.pos.row.0 as usize;
+                    let cursor_col = cursor.state.pos.col.0;
 
-                let cursor_color = self.renderer.named_colors.cursor;
-                self.renderer.trail_cursor.draw(
-                    &mut self.sugarloaf,
-                    scale_factor,
-                    cursor_color,
-                );
+                    // Cursor position in physical pixels.
+                    let cursor_px_x = origin_x + cursor_col as f32 * cell_width;
+                    let cursor_px_y = origin_y + cursor_row as f32 * cell_height;
+
+                    self.renderer.trail_cursor.set_route(current.route_id);
+                    self.renderer.trail_cursor.set_destination(
+                        cursor_px_x,
+                        cursor_px_y,
+                        cell_width,
+                        cell_height,
+                    );
+                    self.renderer.trail_cursor.animate(cell_width, cell_height);
+
+                    let cursor_color = self.renderer.named_colors.cursor;
+                    self.renderer.trail_cursor.draw(
+                        &mut self.sugarloaf,
+                        scale_factor,
+                        cursor_color,
+                    );
+                } else {
+                    self.renderer.trail_cursor.reset();
+                }
             }
         }
 
@@ -4188,7 +4204,7 @@ impl Screen<'_> {
         // indeterminate progress bar, trail cursor animation). UI-only
         // — terminal cells didn't change, but we want the next vsync
         // to fire a render so overlays/animations tick forward.
-        if has_animation {
+        if self.renderer.needs_redraw() {
             self.context_manager
                 .current_mut()
                 .renderable_content

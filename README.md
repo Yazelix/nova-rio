@@ -3,7 +3,7 @@
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only
-five behavioral deltas:
+six behavioral deltas:
 
 - Alternate-screen `CSI 2 J` clears obsolete direct Kitty placements. Remove
   this when upstream preserves the same main-screen scrollback boundary.
@@ -25,14 +25,28 @@ five behavioral deltas:
   delta when upstream provides the same matching and gesture behavior, with the
   accepted modifier available through native configuration.
 
+- Cursor trails obey the existing visibility, blink, focus, and IME policy.
+  Hidden cursors discard their trail; the next visible position starts fresh.
+  New animations request frames until they settle. Remove this delta when
+  upstream passes the same hidden-cursor and idle-animation regressions.
+
 Nova consumes exact commits rather than a moving branch. The `rio` executable,
-crates, configuration schema, and all behavior outside these five deltas remain
+crates, configuration schema, and all behavior outside these six deltas remain
 upstream-owned. Mars features and Yazelix Cursors are intentionally absent.
 
 The hyperlink mechanism was reviewed against upstream `b2e7c38` and historical
 Mars commits `2177a794e7` (matching) and `9dc93ee46e` (paired click ownership).
 Rio's native hints, grid text/wrap helpers, and structured platform opener remain
 the owners; no Mars input subsystem or shell launcher is imported.
+
+The cursor-trail correction was reproduced against that same exact upstream
+baseline, both directly and through Nova Zellij with Yazi and timing-stressed
+Codex output. It reuses Rio's cursor policy and spring state without changing
+application protocols or disabling animation. Run the deterministic regression
+with `cargo test -p rioterm --features wgpu hidden_trail_restarts` and the
+installed-terminal probe with `python3 misc/scripts/test-cursor-trail.py`.
+The probe must show no cursor during hidden phases, snap to the visible position
+on return, and let visible moves settle while terminal output is idle.
 
 ## Upstream Rio
 

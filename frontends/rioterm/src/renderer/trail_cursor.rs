@@ -173,10 +173,16 @@ impl TrailCursor {
         }
     }
 
+    /// Discard the trail while the cursor is hidden; resume at its next position.
+    pub fn reset(&mut self) {
+        self.first_frame = true;
+        self.animating = false;
+    }
+
     pub fn set_route(&mut self, route_id: usize) {
         if self.route_id != Some(route_id) {
             self.route_id = Some(route_id);
-            self.first_frame = true;
+            self.reset();
         }
     }
 
@@ -374,5 +380,54 @@ impl TrailCursor {
     #[inline]
     pub fn is_animating(&self) -> bool {
         self.animating
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn hidden_trail_restarts_at_visible_cursor_and_keeps_animating_moves() {
+        let mut trail = TrailCursor::new();
+        trail.set_route(1);
+        trail.set_destination(340.0, 504.0, 10.0, 24.0);
+        trail.animate(10.0, 24.0);
+        trail.set_destination(0.0, 264.0, 10.0, 24.0);
+        trail.last_frame = Instant::now() - Duration::from_millis(16);
+        trail.animate(10.0, 24.0);
+        assert!(trail.is_animating());
+
+        trail.reset();
+        assert!(
+            !trail.is_animating(),
+            "a hidden trail must not draw or request frames"
+        );
+        trail.set_destination(340.0, 504.0, 10.0, 24.0);
+        trail.animate(10.0, 24.0);
+        assert!(
+            !trail.is_animating(),
+            "showing the cursor must not animate from hidden positions"
+        );
+        for corner in &trail.corners {
+            assert_eq!(
+                (corner.x, corner.y),
+                corner.destination(345.0, 516.0, 10.0, 24.0)
+            );
+        }
+
+        trail.set_destination(440.0, 264.0, 10.0, 24.0);
+        trail.last_frame = Instant::now() - Duration::from_millis(16);
+        trail.animate(10.0, 24.0);
+        assert!(
+            trail.is_animating(),
+            "subsequent visible movement must still animate"
+        );
+        for _ in 0..60 {
+            trail.last_frame = Instant::now() - Duration::from_millis(16);
+            trail.animate(10.0, 24.0);
+        }
+        assert!(!trail.is_animating(), "visible movement must settle");
     }
 }

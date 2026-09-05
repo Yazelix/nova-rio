@@ -150,7 +150,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if args.config_editor {
         let raw = std::io::read_to_string(std::io::stdin())?;
-        print!("{}", rio_backend::config::editor::describe(&raw)?);
+        let inventory =
+            rio_backend::config::editor::describe(&raw).unwrap_or_else(|error| {
+                eprintln!("{error}");
+                std::process::exit(1);
+            });
+        print!("{inventory}");
         return Ok(());
     }
 

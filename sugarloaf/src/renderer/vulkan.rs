@@ -1509,6 +1509,10 @@ impl VulkanImageTexture {
 impl Drop for VulkanImageTexture {
     fn drop(&mut self) {
         unsafe {
+            // Deletion and cache eviction can outpace submitted frames.
+            // ponytail: idle the device here; use deferred retirement if
+            // image churn makes this wait measurable.
+            let _ = self.shared.device_wait_idle();
             // Pool destruction frees the descriptor set; image drops
             // itself.
             self.shared

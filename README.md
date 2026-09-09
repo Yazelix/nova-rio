@@ -3,10 +3,16 @@
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only
-eight behavioral deltas:
+nine behavioral deltas:
 
 - Alternate-screen `CSI 2 J` clears obsolete direct Kitty placements. Remove
   this when upstream preserves the same main-screen scrollback boundary.
+- Linux Vulkan image textures wait for submitted GPU work before freeing their
+  descriptors and pixels on deletion, replacement, eviction, or shutdown. Remove
+  this when upstream protects the same image lifetime. The upstream `b2e7c38`
+  destructor frees live descriptors; Yazi preview cleanup reproduces validation
+  error `VUID-vkDestroyDescriptorPool-descriptorPool-00303`. Verify image/video
+  switching and popup hide/reopen in a fresh Rio with Vulkan validation enabled.
 - Odd and even vertical grid remainders are balanced through one shared grid
   origin. Remove this when upstream uses an equivalent origin for paint,
   input, graphics, cursors, and IME.
@@ -49,7 +55,7 @@ inventory or candidate validation. No dependencies or config defaults change.
 Run its contract with `cargo test -p rio-backend -p rioterm --features rioterm/wgpu config_editor_uses_native_defaults_and_validation`.
 
 Nova consumes exact commits rather than a moving branch. The `rio` executable,
-crates, configuration schema, and all behavior outside these eight deltas remain
+crates, configuration schema, and all behavior outside these nine deltas remain
 upstream-owned. Mars features and Yazelix Cursors are intentionally absent.
 
 The hyperlink mechanism was reviewed against upstream `b2e7c38` and historical

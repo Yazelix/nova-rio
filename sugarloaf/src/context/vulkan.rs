@@ -105,7 +105,6 @@ pub const FRAMES_IN_FLIGHT: usize = 3;
 /// the *next* owner knows the GPU is done with this slot's resources.
 struct FrameSync {
     image_available: vk::Semaphore,
-    render_finished: vk::Semaphore,
     in_flight: vk::Fence,
     cmd_pool: vk::CommandPool,
     cmd_buffer: vk::CommandBuffer,
@@ -133,6 +132,9 @@ pub struct VulkanContext {
     swapchain_format: vk::Format,
     swapchain_images: Vec<vk::Image>,
     swapchain_views: Vec<vk::ImageView>,
+    // Presentation can outlive a frame fence. Reuse only after acquiring
+    // the same swapchain image, not when reusing a frame-in-flight slot.
+    present_semaphores: Vec<vk::Semaphore>,
     swapchain: vk::SwapchainKHR,
     swapchain_loader: khr::swapchain::Device,
 
@@ -256,6 +258,8 @@ impl VulkanContext {
         );
 
         let frames = create_frames(&device, queue_family_index);
+        let present_semaphores =
+            create_present_semaphores(&device, swapchain_images.len());
 
         // f16 = Vulkan's VK_KHR_shader_float16_int8 feature. Probe at
         // device creation time in a follow-up; for the MVP we report
@@ -295,6 +299,7 @@ impl VulkanContext {
             swapchain_format,
             swapchain_images,
             swapchain_views,
+            present_semaphores,
             swapchain,
             swapchain_loader,
             queue,
@@ -340,6 +345,9 @@ impl VulkanContext {
         }
         self.swapchain_views.clear();
         self.swapchain_images.clear();
+        for semaphore in self.present_semaphores.drain(..) {
+            unsafe { self.shared.destroy_semaphore(semaphore, None) };
+        }
 
         let old = self.swapchain;
         let (swapchain, format, color_space, extent, images, views) = create_swapchain(
@@ -359,6 +367,7 @@ impl VulkanContext {
         self.swapchain_format = format;
         self.swapchain_color_space = color_space;
         self.swapchain_extent = extent;
+        self.present_semaphores = create_present_semaphores(&self.shared, images.len());
         self.swapchain_images = images;
         self.swapchain_views = views;
         self.needs_recreate = false;
@@ -449,7 +458,7 @@ impl VulkanContext {
 
             let wait_semaphores = [sync.image_available];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-            let signal_semaphores = [sync.render_finished];
+            let signal_semaphores = [self.present_semaphores[frame.image_index as usize]];
             let cmd_buffers = [sync.cmd_buffer];
             let submit = vk::SubmitInfo::default()
                 .wait_semaphores(&wait_semaphores)
@@ -1022,13 +1031,15 @@ impl Drop for VulkanContext {
 
             for frame in &self.frames {
                 self.shared.destroy_semaphore(frame.image_available, None);
-                self.shared.destroy_semaphore(frame.render_finished, None);
                 self.shared.destroy_fence(frame.in_flight, None);
                 self.shared.destroy_command_pool(frame.cmd_pool, None);
             }
 
             for &view in &self.swapchain_views {
                 self.shared.destroy_image_view(view, None);
+            }
+            for &semaphore in &self.present_semaphores {
+                self.shared.destroy_semaphore(semaphore, None);
             }
             self.swapchain_loader
                 .destroy_swapchain(self.swapchain, None);
@@ -1523,6 +1534,16 @@ fn guess_composite_alpha(
     }
 }
 
+fn create_present_semaphores(device: &Device, image_count: usize) -> Vec<vk::Semaphore> {
+    (0..image_count)
+        .map(|_| unsafe {
+            device
+                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
+                .expect("create_semaphore(present)")
+        })
+        .collect()
+}
+
 fn create_frames(
     device: &Device,
     queue_family_index: u32,
@@ -1537,9 +1558,6 @@ fn create_frames(
 
         unsafe {
             let image_available = device
-                .create_semaphore(&semaphore_info, None)
-                .expect("create_semaphore");
-            let render_finished = device
                 .create_semaphore(&semaphore_info, None)
                 .expect("create_semaphore");
             let in_flight = device
@@ -1558,7 +1576,6 @@ fn create_frames(
 
             FrameSync {
                 image_available,
-                render_finished,
                 in_flight,
                 cmd_pool,
                 cmd_buffer,

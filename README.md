@@ -13,6 +13,10 @@ nine behavioral deltas:
   destructor frees live descriptors; Yazi preview cleanup reproduces validation
   error `VUID-vkDestroyDescriptorPool-descriptorPool-00303`. Verify image/video
   switching and popup hide/reopen in a fresh Rio with Vulkan validation enabled.
+  Presentation semaphores belong to swapchain images, rather than frame slots,
+  so reacquiring the image gates reuse. Intel Wayland reproduces upstream's
+  `VUID-vkQueueSubmit-pSignalSemaphores-00067`; retain this correction until
+  upstream follows the same swapchain ownership through resize and shutdown.
 - Odd and even vertical grid remainders are balanced through one shared grid
   origin. Remove this when upstream uses an equivalent origin for paint,
   input, graphics, cursors, and IME.

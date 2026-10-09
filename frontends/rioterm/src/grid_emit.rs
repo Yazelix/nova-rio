@@ -978,6 +978,8 @@ fn decoration_color(
 /// - INVERSE flag → fg/bg swap promotes the cell to "has explicit bg"
 ///   so it stays opaque. INVERSE bypasses `opacity-cells` to keep
 ///   cursor / inverted-text readable.
+/// - U+2580 / U+2584 with an explicit bg stay opaque to match
+///   their foreground artwork samples.
 ///
 /// Selection / hint highlights are applied at the `build_row_bg` slow
 /// path with their own (always opaque) bg colors, so they don't go
@@ -1032,9 +1034,12 @@ pub fn cell_bg(
             }
             let color = renderer.compute_bg_color(&resolved, term_colors);
             let [r, g, b, _] = normalized_to_u8(color);
-            // INVERSE always opaque — keep cursor / inverted text
-            // readable regardless of the opacity-cells flag.
-            let alpha = if inverse { 255 } else { explicit_bg_alpha };
+            // Half-block background samples must match the foreground's opacity.
+            let alpha = if inverse || matches!(sq.c(), '▀' | '▄') {
+                255
+            } else {
+                explicit_bg_alpha
+            };
             [r, g, b, alpha]
         }
     }
@@ -2693,6 +2698,157 @@ fn rasterize_glyph_native(
         is_color,
         bytes: image.data,
     })
+}
+
+#[cfg(test)]
+mod opacity_tests {
+    use super::*;
+    use rio_backend::config::{colors::ColorRgb, Config};
+    use rio_backend::sugarloaf::sprite;
+
+    fn over(color: [u8; 4], coverage: u8, destination: [f32; 4]) -> [f32; 4] {
+        let alpha = color[3] as f32 / 255.0 * coverage as f32 / 255.0;
+        std::array::from_fn(|i| {
+            let source = if i == 3 { 1.0 } else { color[i] as f32 / 255.0 };
+            source * alpha + destination[i] * (1.0 - alpha)
+        })
+    }
+
+    #[test]
+    fn half_block_compositing_preserves_samples_and_tui_transparency() {
+        let a = ColorRgb {
+            r: 40,
+            g: 100,
+            b: 160,
+        };
+        let b = ColorRgb {
+            r: 180,
+            g: 60,
+            b: 20,
+        };
+        let mut colors = TermColors::default();
+        colors[1] = Some(a.to_arr());
+        colors[2] = Some(b.to_arr());
+        let mut config = Config::default();
+        for (opacity, opacity_cells) in [(0.7, true), (0.7, false), (1.0, true)] {
+            config.window.opacity = opacity;
+            config.window.opacity_cells = opacity_cells;
+            let renderer = Renderer::new(&config);
+            let clear = [0.35, 0.1, 0.45, opacity];
+            for (fg, bg) in [
+                (AnsiColor::Spec(a), AnsiColor::Spec(a)),
+                (AnsiColor::Spec(a), AnsiColor::Spec(b)),
+                (AnsiColor::Indexed(1), AnsiColor::Indexed(1)),
+                (AnsiColor::Indexed(1), AnsiColor::Indexed(2)),
+            ] {
+                for flags in [StyleFlags::empty(), StyleFlags::INVERSE] {
+                    let style = Style {
+                        fg,
+                        bg,
+                        flags,
+                        ..Default::default()
+                    };
+                    let styles = [Style::default(), style];
+                    let mut row = Row::new(3);
+                    for (x, ch) in ['▀', '▄', '█'].into_iter().enumerate() {
+                        row[Column(x)] = Square::from_char(ch);
+                        row[Column(x)].set_style_id(1);
+                    }
+                    let mut backgrounds = Vec::new();
+                    build_row_bg(
+                        &row,
+                        3,
+                        &styles,
+                        &renderer,
+                        &colors,
+                        None,
+                        &[],
+                        &mut backgrounds,
+                    );
+                    let mut samples = [fg, bg].map(|color| {
+                        normalized_to_u8(renderer.compute_color(
+                            &color,
+                            StyleFlags::empty(),
+                            &colors,
+                        ))
+                    });
+                    if flags.contains(StyleFlags::INVERSE) {
+                        samples.reverse();
+                    }
+                    let [expected_fg, expected_bg] = samples;
+                    for height in [23, 24] {
+                        for (x, ch) in ['▀', '▄', '█'].into_iter().enumerate() {
+                            let square = row[Column(x)];
+                            let foreground = cell_fg(square, style, &renderer, &colors);
+                            let background = over(backgrounds[x].rgba, 255, clear);
+                            let raster = sprite::rasterize(ch as u32, 2, height).unwrap();
+                            for y in 0..height {
+                                let covered = match ch {
+                                    '▀' => y < height.div_ceil(2),
+                                    '▄' => y >= height / 2,
+                                    _ => true,
+                                };
+                                let expected =
+                                    if covered { expected_fg } else { expected_bg };
+                                let expected = over(expected, 255, clear);
+                                let pixel = over(
+                                    foreground,
+                                    raster.bytes[y as usize * 2],
+                                    background,
+                                );
+                                assert_eq!(pixel, expected, "{ch} row {y}/{height}, {style:?}, opacity={opacity}, cells={opacity_cells}");
+                            }
+                        }
+                    }
+                    build_row_bg(
+                        &row,
+                        3,
+                        &styles,
+                        &renderer,
+                        &colors,
+                        Some(RowSelection { lo: 0, hi: 2 }),
+                        &[],
+                        &mut backgrounds,
+                    );
+                    assert!(backgrounds.iter().all(|bg| bg.rgba
+                        == normalized_to_u8(renderer.named_colors.selection_background)));
+                }
+            }
+            let style = Style {
+                fg: AnsiColor::Spec(a),
+                bg: AnsiColor::Spec(b),
+                ..Default::default()
+            };
+            let alpha = if opacity_cells {
+                renderer.cell_bg_alpha
+            } else {
+                255
+            };
+            for ch in [' ', 'x', '─', '⣿', '▖'] {
+                let square = Square::from_char(ch);
+                assert_eq!(cell_bg(square, style, &renderer, &colors)[3], alpha);
+                assert_eq!(cell_fg(square, style, &renderer, &colors)[3], 255);
+            }
+            for ch in ['▀', '▄'] {
+                let square = Square::from_char(ch);
+                assert_eq!(
+                    cell_bg(square, Style::default(), &renderer, &colors),
+                    [0; 4]
+                );
+            }
+            let mut square = Square::default();
+            square.set_bg_rgb(b.r, b.g, b.b);
+            assert_eq!(
+                cell_bg(square, Style::default(), &renderer, &colors)[3],
+                alpha
+            );
+            square.set_bg_palette(2);
+            assert_eq!(
+                cell_bg(square, Style::default(), &renderer, &colors)[3],
+                alpha
+            );
+        }
+    }
 }
 
 #[cfg(test)]

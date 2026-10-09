@@ -3,7 +3,7 @@
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only
-nine behavioral deltas:
+ten behavioral deltas:
 
 - Alternate-screen `CSI 2 J` clears obsolete direct Kitty placements. Remove
   this when upstream preserves the same main-screen scrollback boundary.
@@ -20,6 +20,13 @@ nine behavioral deltas:
 - Odd and even vertical grid remainders are balanced through one shared grid
   origin. Remove this when upstream uses an equivalent origin for paint,
   input, graphics, cursors, and IME.
+- Explicit backgrounds of Unicode upper/lower half blocks (`▀` / `▄`) stay
+  opaque, matching their foreground samples, so `window.opacity-cells = true`
+  does not stripe terminal artwork. Default-background sparse halves and
+  ordinary TUI backgrounds retain their existing transparency. This corrects
+  upstream behavior present in `b2e7c38`; current upstream `59203ccd` retains
+  the same alpha routing in `rio-grid`. Remove this when upstream composites
+  both samples consistently without changing normal text opacity.
 - The compact quit prompt uses Nova's rounded orange treatment and measured,
   balanced spacing. Remove this when upstream styling is accepted as-is or
   exposes a native styling surface.
@@ -58,8 +65,20 @@ The config-editor mechanism was reviewed against upstream `b2e7c38` and
 inventory or candidate validation. No dependencies or config defaults change.
 Run its contract with `cargo test -p rio-backend -p rioterm --features rioterm/wgpu config_editor_uses_native_defaults_and_validation`.
 
+The half-block regression is
+`cargo test -p rioterm --features wgpu half_block_compositing`.
+Run `python3 misc/scripts/test-half-block-opacity.py` in a fresh candidate Rio
+with at least 14 rows, `window.opacity = 0.7`, and `window.opacity-cells = true`:
+equal-color columns must be flat, distinct samples must reverse between
+upper/lower blocks, and sparse halves and normal text backgrounds must retain
+translucency. Repeat
+with odd/even cell heights, full opacity, and cell opacity disabled. Selection
+and cursor colors retain their existing overrides. The policy keeps explicitly
+colored half-block artwork opaque; uniformly translucent artwork would require
+coverage-aware compositing rather than applying alpha to two overlaid passes.
+
 Nova consumes exact commits rather than a moving branch. The `rio` executable,
-crates, configuration schema, and all behavior outside these nine deltas remain
+crates, configuration schema, and all behavior outside these ten deltas remain
 upstream-owned. Mars features and Yazelix Cursors are intentionally absent.
 
 The hyperlink mechanism was reviewed against upstream `b2e7c38` and historical

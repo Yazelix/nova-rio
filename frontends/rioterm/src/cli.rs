@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Parser, Default, Debug)]
-#[clap(author, about, version)]
+#[clap(name = "nrio", author, about = "Nova Rio terminal", version)]
 pub struct Cli {
     /// Validate TOML from stdin and print the versioned native editor inventory.
     #[clap(long, conflicts_with_all = ["write_config", "command"])]

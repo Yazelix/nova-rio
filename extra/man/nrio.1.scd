@@ -1,4 +1,4 @@
-RIO(1)
+NRIO(1)
 
 # NAME
 
@@ -35,13 +35,13 @@ Rio is a modern terminal emulator built with Rust and WebGPU that provides high 
 	Rio doesn't create the config file for you, but it looks for one in the
 	following locations on UNIX systems:
 
-		. _$RIO_CONFIG_HOME/config.toml_
-		. _$XDG_CONFIG_HOME/rio/config.toml_
-		. _$HOME/.config/rio/config.toml_
+		. _$NRIO_CONFIG_HOME/config.toml_
+		. _$XDG_CONFIG_HOME/nrio/config.toml_
+		. _$HOME/.config/nrio/config.toml_
 
 	On Windows, the config file will be looked for in:
 
-		. _%USERPROFILE%\\AppData\\Local\\rio\\config.toml_
+		. _%USERPROFILE%\\AppData\\Local\\nrio\\config.toml_
 
 *--enable-log-file*
 
@@ -54,7 +54,7 @@ Rio is a modern terminal emulator built with Rust and WebGPU that provides high 
 # CONFIGURATION
 
 Rio uses TOML format for configuration. The configuration file is automatically
-reloaded when changed. See *rio*(5) for detailed configuration documentation.
+reloaded when changed. See *nrio*(5) for detailed configuration documentation.
 
 # FEATURES
 
@@ -74,14 +74,14 @@ Rio supports many modern terminal features:
 
 # ENVIRONMENT
 
-*RIO_CONFIG_HOME*
+*NRIO_CONFIG_HOME*
 
 	Custom path for Rio configuration directory. When set, Rio will look for
 	configuration files in this directory instead of the default locations.
 
 # SEE ALSO
 
-*rio*(5)
+*nrio*(5)
 
 # BUGS
 

@@ -1,5 +1,5 @@
 {
-  description = "Rio | A hardware-accelerated GPU terminal emulator";
+  description = "Nova Rio | Isolated Yazelix terminal fork";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -26,9 +26,9 @@
         # Defines a devshell using the `rust-toolchain`, allowing for
         # different versions of rust to be used.
         mkDevShell = rust-toolchain: let
-          runtimeDeps = self'.packages.rio.runtimeDependencies;
+          runtimeDeps = self'.packages.nrio.runtimeDependencies;
           tools =
-            self'.packages.rio.nativeBuildInputs ++ self'.packages.rio.buildInputs ++ [rust-toolchain];
+            self'.packages.nrio.nativeBuildInputs ++ self'.packages.nrio.buildInputs ++ [rust-toolchain];
         in
           pkgs.mkShell {
             packages = [self'.formatter] ++ tools;
@@ -38,8 +38,8 @@
           msrv = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           stable = pkgs.rust-bin.stable.latest.minimal;
           nightly = pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.minimal);
-          rio = msrv;
-          default = rio;
+          nrio = msrv;
+          default = nrio;
         };
       in {
         formatter = pkgs.alejandra;
@@ -48,19 +48,29 @@
           overlays = [(import inputs.rust-overlay)];
         };
 
-        # Create overlay to override `rio` with this flake's default
-        overlayAttrs = {inherit (self'.packages) rio;};
+        # Keep upstream pkgs.rio independent.
+        overlayAttrs = {inherit (self'.packages) nrio;};
         packages =
           lib.mapAttrs' (
             k: v: {
               name =
-                if builtins.elem k ["rio" "default"]
+                if builtins.elem k ["nrio" "default"]
                 then k
-                else "rio-${k}";
+                else "nrio-${k}";
               value = pkgs.callPackage ./pkgRio.nix {rust-toolchain = v;};
             }
           )
           toolchains;
+        checks.coexistence =
+          pkgs.runCommand "nova-rio-coexistence" {
+            nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.gnugrep];
+          } ''
+            bash ${./misc/scripts/check-coexistence.sh} ${self'.packages.nrio} ${pkgs.rio} ${pkgs.buildEnv {
+              name = "rio-and-nova-rio";
+              paths = [pkgs.rio self'.packages.nrio];
+            }}
+            touch "$out"
+          '';
         # Different devshells for different rust versions
         devShells = lib.mapAttrs (_: v: mkDevShell v) toolchains;
       };

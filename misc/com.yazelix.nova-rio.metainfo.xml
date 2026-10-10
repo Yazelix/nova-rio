@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.rioterm.Rio</id>
+  <id>com.yazelix.nova-rio</id>
   <content_rating type="oars-1.1" />
 
-  <name>Rio</name>
+  <name>Nova Rio</name>
   <summary>Hardware-accelerated GPU terminal emulator powered by WebGPU</summary>
 
   <description>
@@ -20,7 +20,7 @@
   <project_license>MIT</project_license>
   <metadata_license>CC0-1.0</metadata_license>
 
-  <launchable type="desktop-id">com.rioterm.Rio.desktop</launchable>
+  <launchable type="desktop-id">com.yazelix.nova-rio.desktop</launchable>
 
   <url type="homepage">https://rioterm.com/</url>
   <url type="help">https://rioterm.com/docs/config</url>

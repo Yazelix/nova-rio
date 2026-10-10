@@ -13,7 +13,7 @@ documentation.workspace = true
 readme.workspace = true
 
 [[bin]]
-name = "rio"
+name = "nrio"
 path = "src/main.rs"
 
 [dependencies]
@@ -109,19 +109,19 @@ wgpu = ["sugarloaf/wgpu", "rio-backend/wgpu"]
 # "rio-window/wayland-csd-adwaita-crossfont",
 
 [package.metadata.deb]
-name = "rioterm"
+name = "nova-rio"
 maintainer = "Raphael Amorim <rapha850@gmail.com>"
 copyright = "2022-present, Raphael Amorim <rapha850@gmail.com>"
 depends = "$auto"
 section = "admin"
 priority = "optional"
 assets = [
-    ["../../target/release/rio", "usr/local/bin/", "755"],
-    ["../../misc/rio.desktop", "usr/share/applications/", "644"],
+    ["../../target/release/nrio", "usr/local/bin/", "755"],
+    ["../../misc/com.yazelix.nova-rio.desktop", "usr/share/applications/", "644"],
     ["../../misc/rio.terminfo", "usr/share/info/", "644"],
-    ["../../misc/logo.svg", "usr/share/icons/hicolor/scalable/apps/rio.svg", "644"],
-    ["../../README.md", "usr/share/doc/rio/", "644"],
-    ["../../LICENSE", "usr/share/doc/rio/", "664"]
+    ["../../misc/logo.svg", "usr/share/icons/hicolor/scalable/apps/nrio.svg", "644"],
+    ["../../README.md", "usr/share/doc/nova-rio/", "644"],
+    ["../../LICENSE", "usr/share/doc/nova-rio/", "664"]
 ]
 extended-description = """\
 Rio terminal is a hardware-accelerated GPU terminal emulator, focusing to run in desktops and browsers.

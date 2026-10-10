@@ -7,9 +7,9 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>English</string>
   <key>CFBundleDisplayName</key>
-  <string>Rio</string>
+  <string>Nova Rio</string>
   <key>CFBundleExecutable</key>
-  <string>rio</string>
+  <string>nrio</string>
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>
@@ -81,13 +81,13 @@
 	</dict>
   </array>
   <key>CFBundleIdentifier</key>
-  <string>com.raphaelamorim.rio</string>
+  <string>com.yazelix.nova-rio</string>
   <key>CFBundleGetInfoString</key>
   <string>Hardware-accelerated GPU terminal emulator. More information: https://rioterm.com/</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Rio</string>
+  <string>Nova Rio</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleIconFile</key>
@@ -102,12 +102,12 @@
   <array>
     <dict>
       <key>CFBundleURLName</key>
-      <string>Rio</string>
+      <string>Nova Rio</string>
       <key>CFBundleTypeRole</key>
       <string>Viewer</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>rio</string>
+        <string>nrio</string>
       </array>
     </dict>
   </array>
@@ -177,7 +177,7 @@
       <key>NSMenuItem</key>
       <dict>
         <key>default</key>
-        <string>New Rio Tab Here</string>
+        <string>New Nova Rio Tab Here</string>
       </dict>
       <key>NSMessage</key>
       <string>openTab</string>
@@ -196,7 +196,7 @@
       <key>NSMenuItem</key>
       <dict>
         <key>default</key>
-        <string>New Rio Window Here</string>
+        <string>New Nova Rio Window Here</string>
       </dict>
       <key>NSMessage</key>
       <string>openWindow</string>

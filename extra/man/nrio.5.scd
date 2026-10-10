@@ -1,4 +1,4 @@
-RIO(5)
+NRIO(5)
 
 # NAME
 
@@ -14,13 +14,13 @@ can be found at _https://toml.io/en/v1.0.0_.
 Rio doesn't create the config file for you, but it looks for one in the
 following locations on UNIX systems:
 
-. _$RIO_CONFIG_HOME/config.toml_
-. _$XDG_CONFIG_HOME/rio/config.toml_
-. _$HOME/.config/rio/config.toml_
+. _$NRIO_CONFIG_HOME/config.toml_
+. _$XDG_CONFIG_HOME/nrio/config.toml_
+. _$HOME/.config/nrio/config.toml_
 
 On Windows, the config file will be looked for in:
 
-. _%USERPROFILE%\\AppData\\Local\\rio\\config.toml_
+. _%USERPROFILE%\\AppData\\Local\\nrio\\config.toml_
 
 # GENERAL
 
@@ -427,7 +427,7 @@ This section documents the *[developer]* table of the configuration file.
 
 # SEE ALSO
 
-*rio*(1)
+*nrio*(1)
 
 # BUGS
 

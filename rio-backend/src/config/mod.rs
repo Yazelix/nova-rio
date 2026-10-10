@@ -205,35 +205,35 @@ pub struct CursorConfig {
 #[cfg(target_os = "macos")]
 #[inline]
 pub fn config_dir_path() -> PathBuf {
-    std::env::var("RIO_CONFIG_HOME")
+    std::env::var("NRIO_CONFIG_HOME")
         .map(PathBuf::from)
-        .unwrap_or(dirs::home_dir().unwrap().join(".config").join("rio"))
+        .unwrap_or(dirs::home_dir().unwrap().join(".config").join("nrio"))
 }
 
 #[cfg(target_os = "windows")]
 #[inline]
 pub fn config_dir_path() -> PathBuf {
-    std::env::var("RIO_CONFIG_HOME")
+    std::env::var("NRIO_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or(
             dirs::home_dir()
                 .unwrap()
                 .join("AppData")
                 .join("Local")
-                .join("rio"),
+                .join("nrio"),
         )
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[inline]
 pub fn config_dir_path() -> PathBuf {
-    std::env::var("RIO_CONFIG_HOME")
+    std::env::var("NRIO_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or(
             std::env::var("XDG_CONFIG_HOME")
                 .map(PathBuf::from)
                 .unwrap_or(dirs::home_dir().unwrap().join(".config"))
-                .join("rio"),
+                .join("nrio"),
         )
 }
 

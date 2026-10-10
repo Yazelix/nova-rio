@@ -3,7 +3,13 @@
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only
-ten behavioral deltas:
+eleven behavioral deltas:
+
+- Standalone distribution uses `nrio`, independent `nrio` config directories,
+  `NRIO_CONFIG_HOME`, and the `Nova Rio` / `com.yazelix.nova-rio` application
+  identity. The Nix overlay exports `nrio` without overriding `pkgs.rio`.
+  Retire this identity delta when the fork is removed or upstream owns an
+  independently selectable distribution identity.
 
 - Alternate-screen `CSI 2 J` clears obsolete direct Kitty placements. Remove
   this when upstream preserves the same main-screen scrollback boundary.
@@ -77,9 +83,10 @@ and cursor colors retain their existing overrides. The policy keeps explicitly
 colored half-block artwork opaque; uniformly translucent artwork would require
 coverage-aware compositing rather than applying alpha to two overlaid passes.
 
-Nova consumes exact commits rather than a moving branch. The `rio` executable,
-crates, configuration schema, and all behavior outside these ten deltas remain
-upstream-owned. Mars features and Yazelix Cursors are intentionally absent.
+Nova consumes exact commits rather than a moving branch. The crates, native
+configuration schema, terminal type (`rio` / `xterm-rio`), and all behavior
+outside these eleven deltas remain upstream-owned. Mars features and Yazelix
+Cursors are intentionally absent.
 
 The hyperlink mechanism was reviewed against upstream `b2e7c38` and historical
 Mars commits `2177a794e7` (matching) and `9dc93ee46e` (paired click ownership).
@@ -94,6 +101,46 @@ Hidden phases must show no cursor; revealing it must not animate from the hidden
 position, and visible moves must settle while terminal output is idle.
 Synchronized repaint phases must keep the visible cursor steady. Their parser
 regression is `cargo test -p rio-vt sync_update_buffers_payload`.
+
+## Install beside upstream Rio
+
+The supported fork installation is the Nix flake on Linux and macOS:
+
+```sh
+nix profile add github:Yazelix/nova-rio/edge#nrio
+nrio
+```
+
+Pin an exact commit in a consumer lock file. Home Manager users add
+`inputs.nova-rio.packages.${pkgs.stdenv.hostPlatform.system}.nrio` to
+`home.packages`; keep the upstream Rio package and configuration independent.
+The overlay exports `pkgs.nrio`, leaving `pkgs.rio` alone.
+
+The fork reads `$XDG_CONFIG_HOME/nrio/config.toml` on Linux (default
+`~/.config/nrio/config.toml`) and `~/.config/nrio/config.toml` on macOS.
+`NRIO_CONFIG_HOME` overrides that directory. Upstream `RIO_CONFIG_HOME` has no
+effect on the fork. The native configuration schema and `--write-config`
+remain Rio's. No existing Rio config is migrated or rewritten.
+Linux installs `com.yazelix.nova-rio.desktop`, titled **Nova Rio**, with its own
+`nrio` icon and application ID; macOS installs **NovaRio.app** with bundle ID
+`com.yazelix.nova-rio` and the `nrio` URL scheme. These coexist with upstream's
+identities. The terminal capability names remain upstream's for compatibility.
+
+To use a separately installed no-Rio Nova archive, set the fork's native config:
+
+```toml
+[shell]
+program = "/absolute/path/to/archive/bin/yzx"
+args = ["enter"]
+```
+
+Use an absolute installed archive path or its stable installation symlink.
+The full Nova package already selects its pinned fork and Nova-owned config;
+it does not expose `nrio` on PATH. The no-Rio archive still omits Rio.
+`nix build .#checks.x86_64-linux.coexistence` checks both packages and independent
+config creation. Native Darwin checks use `checks.aarch64-darwin.coexistence`;
+Linux evaluation alone does not prove macOS behavior. Other inherited upstream
+packaging recipes are not a supported Nova release channel.
 
 ## Upstream Rio
 

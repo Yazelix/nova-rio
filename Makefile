@@ -1,11 +1,11 @@
 BUILD_MISC_DIR = misc
-TARGET = rio
+TARGET = nrio
 TARGET_DIR = target/release
 TARGET_DIR_DEBIAN = target/debian
 TARGET_DIR_OSX = $(TARGET_DIR)/osx
 RELEASE_DIR = release
 
-APP_NAME = Rio.app
+APP_NAME = NovaRio.app
 APP_TEMPLATE = $(BUILD_MISC_DIR)/osx/$(APP_NAME)
 APP_BINARY = $(TARGET_DIR)/$(TARGET)
 APP_BINARY_DIR = $(TARGET_DIR_OSX)/$(APP_NAME)/Contents/MacOS
@@ -137,10 +137,10 @@ bump-brew:
 # TODO: Move to bin path
 release-x11:
 	RUSTFLAGS='-C link-arg=-s' cargo build --release --no-default-features --features=x11
-	target/release/rio
+	target/release/nrio
 release-wayland:
 	RUSTFLAGS='-C link-arg=-s' cargo build --release --no-default-features --features=wayland
-	target/release/rio
+	target/release/nrio
 
 # Debian
 # cargo install cargo-deb

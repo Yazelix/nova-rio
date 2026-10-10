@@ -1,17 +1,17 @@
 [Desktop Entry]
 Type=Application
-TryExec=rio
-Exec=rio
-Icon=rio
+TryExec=nrio
+Exec=nrio
+Icon=nrio
 Terminal=false
 Categories=System;TerminalEmulator;
 
-Name=Rio
+Name=Nova Rio
 GenericName=Terminal
 Comment=A hardware-accelerated GPU terminal emulator powered by WebGPU
-StartupWMClass=Rio
+StartupWMClass=com.yazelix.nova-rio
 Actions=New;
 
 [Desktop Action New]
 Name=New Terminal
-Exec=rio
+Exec=nrio

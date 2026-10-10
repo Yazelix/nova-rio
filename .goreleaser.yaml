@@ -4,6 +4,7 @@
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
 
 version: 2
+project_name: nova-rio
 
 partial:
   by: goos
@@ -28,18 +29,21 @@ before:
 
 builds:
   - id: windows-x86_64
+    binary: nrio
     builder: rust
     command: build
     flags: [--release, -p=rioterm, --features=wgpu]
     targets: [x86_64-pc-windows-msvc]
 
   - id: windows-arm64
+    binary: nrio
     builder: rust
     command: build
     flags: [--release, -p=rioterm, --features=wgpu]
     targets: [aarch64-pc-windows-msvc]
 
   - id: macos
+    binary: nrio
     builder: rust
     command: build
     flags: [--release, -p=rioterm, --features=wgpu]
@@ -48,12 +52,14 @@ builds:
     targets: [x86_64-apple-darwin, aarch64-apple-darwin]
 
   - id: linux-arm64-wayland
+    binary: nrio
     builder: rust
     command: build
     flags: [--release, -p=rioterm, --no-default-features, --features=wayland, --features=wgpu]
     targets: [aarch64-unknown-linux-gnu]
 
   - id: linux-arm64-x11
+    binary: nrio
     builder: rust
     command: build
     flags: [--release, -p=rioterm, --no-default-features, --features=x11, --features=wgpu]
@@ -62,6 +68,7 @@ builds:
     targets: [aarch64-unknown-linux-gnu]
 
   - id: linux-x64-wayland
+    binary: nrio
     builder: rust
     command: build
     flags: [--release, -p=rioterm, --no-default-features, --features=wayland, --features=wgpu]
@@ -70,6 +77,7 @@ builds:
     targets: [x86_64-unknown-linux-gnu]
 
   - id: linux-x64-x11
+    binary: nrio
     builder: rust
     command: build
     flags: [--release, -p=rioterm, --no-default-features, --features=x11, --features=wgpu]
@@ -113,6 +121,7 @@ archives:
 
 universal_binaries:
   - id: rio
+    name_template: nrio
     ids: [macos]
     replace: true
 
@@ -135,17 +144,18 @@ notarize:
 
 app_bundles:
   - id: rio
+    name: NovaRio
     ids: [rio]
-    icon: ./misc/osx/Rio.app/Contents/Resources/icon.icns
-    bundle: com.raphaelamorim.rio
+    icon: ./misc/osx/NovaRio.app/Contents/Resources/icon.icns
+    bundle: com.yazelix.nova-rio
     extra_files:
       - src: ./misc/72/rio
         dst: Contents/Resources/72/rio
       # releases made before goreleaser integration included the classic icon
-      - src: ./misc/osx/Rio.app/Contents/Resources/icon-classic.icns
+      - src: ./misc/osx/NovaRio.app/Contents/Resources/icon-classic.icns
         dst: Contents/Resources/icon-classic.icns
     templated_extra_files:
-      - src: ./misc/osx/Rio.app/Contents/Info.plist
+      - src: ./misc/osx/NovaRio.app/Contents/Info.plist
         dst: Contents/Info.plist
 
 nfpms:
@@ -153,92 +163,92 @@ nfpms:
     id: deb-arm64-wayland
     ids: [linux-arm64-wayland]
     file_name_template: "{{- trimsuffix .ConventionalFileName .ConventionalExtension -}}_wayland"
-    package_name: rioterm
+    package_name: nova-rio
     dependencies: [libc6 (>= 2.35), libstdc++6 (>= 11)]
     overrides:
       rpm:
         dependencies: [glibc, libstdc++]
         contents:
-          - src: ./misc/rio.desktop
-            dst: /usr/share/applications/rio.desktop
+          - src: ./misc/com.yazelix.nova-rio.desktop
+            dst: /usr/share/applications/com.yazelix.nova-rio.desktop
           - src: ./misc/r/rio
             dst: /usr/share/terminfo/r/rio
           - src: ./misc/logo.svg
-            dst: /usr/share/icons/hicolor/scalable/apps/rio.svg
+            dst: /usr/share/icons/hicolor/scalable/apps/nrio.svg
     contents:
-      - src: ./misc/rio.desktop
-        dst: /usr/share/applications/rio.desktop
+      - src: ./misc/com.yazelix.nova-rio.desktop
+        dst: /usr/share/applications/com.yazelix.nova-rio.desktop
       - src: ./misc/logo.svg
-        dst: /usr/share/icons/hicolor/scalable/apps/rio.svg
+        dst: /usr/share/icons/hicolor/scalable/apps/nrio.svg
     section: admin
     priority: optional
   - formats: [deb, rpm]
     id: deb-arm64-x11
     ids: [linux-arm64-x11]
     file_name_template: "{{- trimsuffix .ConventionalFileName .ConventionalExtension -}}_x11"
-    package_name: rioterm
+    package_name: nova-rio
     dependencies: [libc6 (>= 2.35), libstdc++6 (>= 11)]
     overrides:
       rpm:
         dependencies: [glibc, libstdc++]
         contents:
-          - src: ./misc/rio.desktop
-            dst: /usr/share/applications/rio.desktop
+          - src: ./misc/com.yazelix.nova-rio.desktop
+            dst: /usr/share/applications/com.yazelix.nova-rio.desktop
           - src: ./misc/r/rio
             dst: /usr/share/terminfo/r/rio
           - src: ./misc/logo.svg
-            dst: /usr/share/icons/hicolor/scalable/apps/rio.svg
+            dst: /usr/share/icons/hicolor/scalable/apps/nrio.svg
     contents:
-      - src: ./misc/rio.desktop
-        dst: /usr/share/applications/rio.desktop
+      - src: ./misc/com.yazelix.nova-rio.desktop
+        dst: /usr/share/applications/com.yazelix.nova-rio.desktop
       - src: ./misc/logo.svg
-        dst: /usr/share/icons/hicolor/scalable/apps/rio.svg
+        dst: /usr/share/icons/hicolor/scalable/apps/nrio.svg
     section: admin
     priority: optional
   - formats: [deb, rpm]
     id: deb-x64-wayland
     ids: [linux-x64-wayland]
     file_name_template: "{{- trimsuffix .ConventionalFileName .ConventionalExtension -}}_wayland"
-    package_name: rioterm
+    package_name: nova-rio
     dependencies: [libc6 (>= 2.35), libstdc++6 (>= 11)]
     overrides:
       rpm:
         dependencies: [glibc, libstdc++]
         contents:
-          - src: ./misc/rio.desktop
-            dst: /usr/share/applications/rio.desktop
+          - src: ./misc/com.yazelix.nova-rio.desktop
+            dst: /usr/share/applications/com.yazelix.nova-rio.desktop
           - src: ./misc/r/rio
             dst: /usr/share/terminfo/r/rio
           - src: ./misc/logo.svg
-            dst: /usr/share/icons/hicolor/scalable/apps/rio.svg
+            dst: /usr/share/icons/hicolor/scalable/apps/nrio.svg
     contents:
-      - src: ./misc/rio.desktop
-        dst: /usr/share/applications/rio.desktop
+      - src: ./misc/com.yazelix.nova-rio.desktop
+        dst: /usr/share/applications/com.yazelix.nova-rio.desktop
       - src: ./misc/logo.svg
-        dst: /usr/share/icons/hicolor/scalable/apps/rio.svg
+        dst: /usr/share/icons/hicolor/scalable/apps/nrio.svg
     section: admin
     priority: optional
   - formats: [deb, rpm]
     id: deb-x64-x11
     ids: [linux-x64-x11]
     file_name_template: "{{- trimsuffix .ConventionalFileName .ConventionalExtension -}}_x11"
-    package_name: rioterm
+    package_name: nova-rio
     dependencies: [libc6 (>= 2.35), libstdc++6 (>= 11)]
     overrides:
       rpm:
         dependencies: [glibc, libstdc++]
         contents:
-          - src: ./misc/rio.desktop
-            dst: /usr/share/applications/rio.desktop
+          - src: ./misc/com.yazelix.nova-rio.desktop
+            dst: /usr/share/applications/com.yazelix.nova-rio.desktop
           - src: ./misc/r/rio
             dst: /usr/share/terminfo/r/rio
           - src: ./misc/logo.svg
-            dst: /usr/share/icons/hicolor/scalable/apps/rio.svg
+            dst: /usr/share/icons/hicolor/scalable/apps/nrio.svg
     contents:
-      - src: ./misc/rio.desktop
-        dst: /usr/share/applications/rio.desktop
+      - src: ./misc/com.yazelix.nova-rio.desktop
+        dst: /usr/share/applications/com.yazelix.nova-rio.desktop
       - src: ./misc/logo.svg
-        dst: /usr/share/icons/hicolor/scalable/apps/rio.svg
+        dst: /usr/share/icons/hicolor/scalable/apps/nrio.svg
     section: admin
     priority: optional
 
@@ -255,45 +265,6 @@ msi:
     ids: [windows-arm64]
     extensions: [WixToolset.UI.wixext, WixToolset.Util.wixext]
     extra_files: [./misc/windows/rio.ico, ./misc/windows/License.rtf]
-
-winget:
-  - use: msi
-    name: Rio
-    package_identifier: raphamorim.rio
-    author: Raphael Amorim
-    release_notes: "{{ .Changelog }}"
-    release_notes_url: https://github.com/raphamorim/rio/releases/tag/{{ .Tag }}
-    publisher: Raphael Amorim
-    publisher_url: https://raphamorim.io
-    publisher_support_url: https://github.com/raphamorim/rio/issues
-    license_url: https://raw.githubusercontent.com/raphamorim/rio/main/LICENSE
-    copyright: Copyright (c) {{ .Now.Format "2006" }} Raphael Amorim
-    copyright_url: https://raw.githubusercontent.com/raphamorim/rio/main/LICENSE
-    tags: [cross-platform, terminal, terminal-emulators]
-    commit_msg_template: "New version: raphamorim.rio {{ .Tag }}"
-    commit_author:
-      name: raphamorim
-      email: 3630346+raphamorim@users.noreply.github.com
-    repository:
-      owner: raphamorim
-      name: winget-pkgs
-      branch: rio-{{ .Tag }}-{{ .Now.Format "20060102150405"}}
-      pull_request:
-        enabled: true
-        base:
-          owner: microsoft
-          name: winget-pkgs
-          branch: master
-        draft: false
-
-after:
-  hooks:
-    # homebrew-cask is bumped automatically by BrewTestBot (cask has livecheck)
-    # --no-verify: the build matrix already compiled every crate; publish's
-    # default-feature rebuild trips rio-window's platform compile_error.
-    - cmd: cargo publish --workspace --no-verify
-      if: "{{ and .IsRelease .IsMerging }}"
-      output: true
 
 metadata:
   maintainers: [Raphael Amorim <rapha850 at gmail dot com>]

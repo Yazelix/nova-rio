@@ -56,7 +56,7 @@
 in
   rustPlatform.buildRustPackage {
     inherit (cargoToml.workspace.package) version;
-    name = "rio";
+    name = "nova-rio";
     src = toSource {
       root = ./.;
       fileset = unions ([
@@ -92,10 +92,10 @@ in
 
     postInstall =
       ''
-        install -D -m 644 misc/rio.desktop -t \
+        install -D -m 644 misc/com.yazelix.nova-rio.desktop -t \
                           $out/share/applications
         install -D -m 644 misc/logo.svg \
-                          $out/share/icons/hicolor/scalable/apps/rio.svg
+                          $out/share/icons/hicolor/scalable/apps/nrio.svg
 
         # Install terminfo files
         install -dm 755 "$terminfo/share/terminfo/r/"
@@ -105,9 +105,9 @@ in
       ''
       + lib.optionalString stdenv.hostPlatform.isDarwin ''
         mkdir $out/Applications/
-        mv misc/osx/Rio.app/ $out/Applications/
-        mkdir $out/Applications/Rio.app/Contents/MacOS/
-        ln -s $out/bin/rio $out/Applications/Rio.app/Contents/MacOS/
+        cp -R "misc/osx/NovaRio.app" "$out/Applications/"
+        mkdir "$out/Applications/NovaRio.app/Contents/MacOS/"
+        ln -s $out/bin/nrio "$out/Applications/NovaRio.app/Contents/MacOS/nrio"
       '';
 
     buildNoDefaultFeatures = true;
@@ -120,6 +120,6 @@ in
       license = lib.licenses.mit;
       platforms = lib.platforms.unix;
       changelog = "https://github.com/raphamorim/rio/blob/master/CHANGELOG.md";
-      mainProgram = "rio";
+      mainProgram = "nrio";
     };
   }

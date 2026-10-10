@@ -1,7 +1,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
    <Package
-      Name="Rio"
-      UpgradeCode="87c21c74-dbd5-4584-89d5-46d9cd0c40a8"
+      Name="Nova Rio"
+      UpgradeCode="f3852c26-be09-4533-b49d-a1a6a98491f9"
       Language="1033"
       Codepage="1252"
       Version="{{ .Version }}"
@@ -23,36 +23,36 @@
       <!-- Application binaries -->
       <DirectoryRef Id="RioProgramFiles">
          <Component Id="RioExe">
-            <File Id="RioExeFile" Source="{{ .Binary }}.exe" Name="rio.exe" KeyPath="yes" />
+            <File Id="RioExeFile" Source="{{ .Binary }}.exe" Name="nrio.exe" KeyPath="yes" />
          </Component>
       </DirectoryRef>
       <DirectoryRef Id="RioProgramMenu">
          <!-- Application shortcut -->
-         <Component Id="RioShortcut" Guid="aa36e61a-23cd-4383-b744-2f78e912f0dc">
-            <Shortcut Id="RioShortcutFile" Name="Rio" Description="A hardware-accelerated GPU terminal emulator" Target="[RioProgramFiles]rio.exe" Icon="RioIcon" />
+         <Component Id="RioShortcut" Guid="03eba745-707f-4e8e-933f-9b16f5b08f5e">
+            <Shortcut Id="RioShortcutFile" Name="Nova Rio" Description="A hardware-accelerated GPU terminal emulator" Target="[RioProgramFiles]nrio.exe" Icon="RioIcon" />
             <RemoveFolder Id="RioProgramMenu" On="uninstall" />
-            <RegistryValue Root="HKCU" Key="Software\Microsoft\Rio" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+            <RegistryValue Root="HKCU" Key="Software\Yazelix\NovaRio" Name="installed" Type="integer" Value="1" KeyPath="yes" />
          </Component>
       </DirectoryRef>
       <DirectoryRef Id="RioProgramFiles">
          <!-- Add to PATH -->
-         <Component Id="ModifyPathEnv" Guid="edf0b679-9eb6-46f7-a5d1-5160f30acb34" KeyPath="yes">
+         <Component Id="ModifyPathEnv" Guid="effabd51-5e02-459f-a873-ac6d49cb138d" KeyPath="yes">
             <Environment Id="PathEnv" Value="[RioProgramFiles]" Name="PATH" Permanent="no" Part="first" Action="set" System="yes" />
          </Component>
       </DirectoryRef>
       <StandardDirectory Id="ProgramFiles64Folder">
-         <Directory Id="RioProgramFiles" Name="Rio" />
+         <Directory Id="RioProgramFiles" Name="Nova Rio" />
       </StandardDirectory>
       <StandardDirectory Id="ProgramMenuFolder">
-         <Directory Id="RioProgramMenu" Name="Rio" />
+         <Directory Id="RioProgramMenu" Name="Nova Rio" />
       </StandardDirectory>
       <!-- Add context menu -->
-      <Component Id="ContextMenu" Guid="449f9121-f7b9-41fe-82da-52349ea8ff91" Directory="TARGETDIR">
-         <RegistryKey Root="HKCU" Key="Software\Classes\Directory\Background\shell\Open Rio here\command">
-            <RegistryValue Type="string" Value='[RioProgramFiles]rio.exe --working-dir "%v"' KeyPath="yes" />
+      <Component Id="ContextMenu" Guid="ed91604c-3464-4601-8d40-02e5bc7b954b" Directory="TARGETDIR">
+         <RegistryKey Root="HKCU" Key="Software\Classes\Directory\Background\shell\Open Nova Rio here\command">
+            <RegistryValue Type="string" Value='[RioProgramFiles]nrio.exe --working-dir "%v"' KeyPath="yes" />
          </RegistryKey>
-         <RegistryKey Root="HKCU" Key="Software\Classes\Directory\Background\shell\Open Rio here">
-            <RegistryValue Type="string" Name="Icon" Value="[RioProgramFiles]rio.exe" />
+         <RegistryKey Root="HKCU" Key="Software\Classes\Directory\Background\shell\Open Nova Rio here">
+            <RegistryValue Type="string" Name="Icon" Value="[RioProgramFiles]nrio.exe" />
          </RegistryKey>
       </Component>
    </Package>

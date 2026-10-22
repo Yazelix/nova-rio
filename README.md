@@ -125,6 +125,10 @@ Linux installs `com.yazelix.nova-rio.desktop`, titled **Nova Rio**, with its own
 `nrio` icon and application ID; macOS installs **NovaRio.app** with bundle ID
 `com.yazelix.nova-rio` and the `nrio` URL scheme. These coexist with upstream's
 identities. The terminal capability names remain upstream's for compatibility.
+On Linux, `nrio` adds the package's Mesa Vulkan drivers to standard driver
+discovery (`VK_ADD_DRIVER_FILES`), so it opens outside NixOS. Host drivers stay
+visible, and an explicit `VK_ADD_DRIVER_FILES`, `VK_DRIVER_FILES` or
+`VK_ICD_FILENAMES` keeps Vulkan Loader precedence.
 
 To use a separately installed no-Rio Nova archive, set the fork's native config:
 
@@ -137,8 +141,8 @@ args = ["enter"]
 Use an absolute installed archive path or its stable installation symlink.
 The full Nova package already selects its pinned fork and Nova-owned config;
 it does not expose `nrio` on PATH. The no-Rio archive still omits Rio.
-`nix build .#checks.x86_64-linux.coexistence` checks both packages and independent
-config creation. Native Darwin checks use `checks.aarch64-darwin.coexistence`;
+`nix build .#checks.x86_64-linux.coexistence` checks both packages, independent
+config creation, and the Linux Vulkan driver wrapper. Native Darwin checks use `checks.aarch64-darwin.coexistence`;
 Linux evaluation alone does not prove macOS behavior. Other inherited upstream
 packaging recipes are not a supported Nova release channel.
 

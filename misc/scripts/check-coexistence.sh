@@ -18,7 +18,11 @@ unset NRIO_CONFIG_HOME RIO_CONFIG_HOME
 mkdir -p "$HOME"
 case "$(uname)" in
   Darwin) config="$HOME/.config" ;;
-  *) config="$XDG_CONFIG_HOME" ;;
+  *)
+    config="$XDG_CONFIG_HOME"
+    grep -Fq VK_ADD_DRIVER_FILES "$fork/bin/nrio"
+    if grep -Fq VK_ICD_FILENAMES "$fork/bin/nrio"; then exit 1; fi
+    ;;
 esac
 "$upstream/bin/rio" --write-config
 cp "$config/rio/config.toml" upstream.toml

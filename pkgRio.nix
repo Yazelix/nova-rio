@@ -7,6 +7,8 @@
   stdenv,
   darwin,
   autoPatchelfHook,
+  makeWrapper,
+  mesa,
   cmake,
   ncurses,
   pkg-config,
@@ -83,6 +85,7 @@ in
         cmake
         pkg-config
         autoPatchelfHook
+        makeWrapper
       ];
 
     outputs = [
@@ -102,6 +105,12 @@ in
         tic -xe xterm-rio,rio,rio-direct -o "$terminfo/share/terminfo" misc/rio.terminfo
         mkdir -p $out/nix-support
         echo "$terminfo" >> $out/nix-support/propagated-user-env-packages
+      ''
+      # Outside NixOS the Nix Vulkan loader finds no usable driver; add packaged
+      # Mesa to standard discovery, keeping host drivers and user overrides.
+      + lib.optionalString stdenv.hostPlatform.isLinux ''
+        wrapProgram $out/bin/nrio \
+          --set-default VK_ADD_DRIVER_FILES ${mesa}/share/vulkan/icd.d
       ''
       + lib.optionalString stdenv.hostPlatform.isDarwin ''
         mkdir $out/Applications/

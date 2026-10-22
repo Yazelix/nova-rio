@@ -1,5 +1,11 @@
 # Nova Rio fork
 
+Nova Rio is temporary. It retires when Nova no longer needs it: when upstream
+Rio carries every delta below (or an equivalent), or when Nova replaces Nova
+Rio with Zellij's own terminal. Each delta lists its own removal condition.
+No delta has been proposed upstream yet, and that may never happen: as of
+October 2026, Zellij's own terminal window is close to release.
+
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only

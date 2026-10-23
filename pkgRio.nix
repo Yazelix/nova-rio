@@ -26,6 +26,11 @@
   withWayland ? !stdenv.isDarwin,
   wayland,
   shaderc,
+  fetchurl,
+  jetbrains-mono,
+  nerd-fonts,
+  noto-fonts,
+  noto-fonts-color-emoji,
   ...
 }: let
   readTOML = f: builtins.fromTOML (builtins.readFile f);
@@ -54,6 +59,25 @@
       wayland
     ];
 
+  # The built-in Nova look names these families; only the Nerd Font regular face is used.
+  symbolsNerdFont = nerd-fonts.jetbrains-mono.overrideAttrs (old: {
+    version = "3.5.0+2.304";
+    src = fetchurl {
+      url = "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.0/JetBrainsMono.tar.xz";
+      hash = "sha256-AieyIDYKb4Gbnq2SND6BErNHMwVHglYa9Qz7oeivq2M=";
+    };
+    postUnpack = ''
+      find . -name '*.ttf' ! -name 'JetBrainsMonoNerdFont-Regular.ttf' -delete
+    '';
+    passthru = old.passthru // {releaseVersion = "3.5.0";};
+  });
+  fontDirs = [
+    "${jetbrains-mono}/share/fonts/truetype"
+    "${symbolsNerdFont}/share/fonts/truetype/NerdFonts/JetBrainsMono"
+    "${noto-fonts}/share/fonts/noto"
+    "${noto-fonts-color-emoji}/share/fonts/noto"
+  ];
+
   inherit (lib.fileset) unions toSource;
 in
   rustPlatform.buildRustPackage {
@@ -71,6 +95,11 @@ in
     cargoLock.lockFile = ./Cargo.lock;
 
     cargoBuildFlags = "-p rioterm";
+
+    postPatch = ''
+      substituteInPlace rio-backend/src/config/nova/config.toml \
+        --replace-fail 'additional-dirs = []' 'additional-dirs = ${builtins.toJSON fontDirs}'
+    '';
 
     buildInputs = rlinkLibs ++ (lib.optionals stdenv.isDarwin [darwin.libutil]);
     runtimeDependencies = rlinkLibs;

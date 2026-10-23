@@ -32,11 +32,12 @@ use crate::config::window::Window;
 use colors::Colors;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{default::Default, fs::File};
 #[cfg(feature = "renderer")]
 use sugarloaf::font::fonts::SugarloafFonts;
 use theme::{AdaptiveColors, AdaptiveTheme, AppearanceTheme, Theme};
+#[cfg(test)]
 use tracing::warn;
 
 /// `program` of `None` means no program was configured, so the user's default
@@ -293,6 +294,37 @@ pub fn create_config_file(path: Option<PathBuf>) {
     }
 }
 
+// Nova's terminal look is nrio's base; the user's TOML replaces it key by key.
+const NOVA_CONFIG: &str = include_str!("nova/config.toml");
+const NOVA_THEMES: [(&str, &str); 2] = [
+    ("nova-dark", include_str!("nova/themes/nova-dark.toml")),
+    ("nova-light", include_str!("nova/themes/nova-light.toml")),
+];
+
+fn with_nova_base(user: toml::Table) -> Result<Config, toml::de::Error> {
+    let mut merged: toml::Table = toml::from_str(NOVA_CONFIG)?;
+    // A user theme alone must not lose to the base's adaptive palettes.
+    if user.contains_key("theme") && !user.contains_key("adaptive-theme") {
+        merged.remove("adaptive-theme");
+    }
+    overlay(&mut merged, user);
+    toml::Value::Table(merged).try_into()
+}
+
+fn overlay(base: &mut toml::Table, user: toml::Table) {
+    for (key, value) in user {
+        match (base.get_mut(&key), value) {
+            (Some(toml::Value::Table(table)), toml::Value::Table(user)) => {
+                overlay(table, user)
+            }
+            (Some(slot), value) => *slot = value,
+            (None, value) => {
+                base.insert(key, value);
+            }
+        }
+    }
+}
+
 impl Config {
     #[cfg(test)]
     fn load_from_path(path: &PathBuf) -> Self {
@@ -362,6 +394,7 @@ impl Config {
         }
     }
 
+    #[cfg(test)]
     fn load_theme(path: &PathBuf) -> Result<Theme, String> {
         if path.exists() {
             let content = std::fs::read_to_string(path).unwrap();
@@ -378,111 +411,18 @@ impl Config {
         toml::to_string(self)
     }
 
-    pub fn load() -> Self {
-        let config_path = config_dir_path();
-        let path = config_file_path();
-        if path.exists() {
-            let content = std::fs::read_to_string(path).unwrap();
-            match toml::from_str::<Config>(&content) {
-                Ok(mut decoded) => {
-                    let theme = &decoded.theme;
-                    if theme.is_empty() {
-                        return decoded;
-                    }
-
-                    let path = config_path
-                        .join("themes")
-                        .join(theme)
-                        .with_extension("toml");
-                    if let Ok(loaded_theme) = Config::load_theme(&path) {
-                        decoded.colors = loaded_theme.colors;
-                    } else {
-                        warn!("failed to load theme: {}", theme);
-                    }
-
-                    decoded
-                }
-                Err(err_message) => {
-                    warn!("failure to parse config file, falling back to default...\n{err_message:?}");
-                    Config::default()
-                }
-            }
-        } else {
-            Config::default()
-        }
+    /// Nova's terminal look, used when the config file is missing or invalid.
+    pub fn base() -> Self {
+        Config::from_toml("", None).expect("embedded Nova configuration is valid")
     }
 
     pub fn try_load() -> Result<Self, ConfigError> {
         let path = config_file_path();
         if path.exists() {
             match std::fs::read_to_string(path) {
-                Ok(content) => match toml::from_str::<Config>(&content) {
-                    Ok(mut decoded) => {
-                        let theme = &decoded.theme;
-                        let theme_path = config_dir_path().join("themes");
-                        if !theme.is_empty() {
-                            let path = theme_path.join(theme).with_extension("toml");
-                            match Config::load_theme(&path) {
-                                Ok(loaded_theme) => {
-                                    decoded.colors = loaded_theme.colors;
-                                }
-                                Err(err_message) => {
-                                    return Err(ConfigError::ErrLoadingTheme(
-                                        err_message,
-                                    ));
-                                }
-                            }
-                        }
-
-                        if let Some(adaptive_theme) = &decoded.adaptive_theme {
-                            let mut adaptive_colors = AdaptiveColors {
-                                dark: None,
-                                light: None,
-                            };
-
-                            let light_theme = &adaptive_theme.light;
-                            let path =
-                                theme_path.join(light_theme).with_extension("toml");
-                            match Config::load_theme(&path) {
-                                Ok(light_loaded_theme) => {
-                                    adaptive_colors.light =
-                                        Some(light_loaded_theme.colors)
-                                }
-                                Err(err_message) => {
-                                    warn!("failed to load light theme: {}", light_theme);
-                                    return Err(ConfigError::ErrLoadingTheme(
-                                        err_message,
-                                    ));
-                                }
-                            }
-
-                            let dark_theme = &adaptive_theme.dark;
-                            let path = theme_path.join(dark_theme).with_extension("toml");
-                            match Config::load_theme(&path) {
-                                Ok(dark_loaded_theme) => {
-                                    adaptive_colors.dark = Some(dark_loaded_theme.colors)
-                                }
-                                Err(err_message) => {
-                                    warn!("failed to load dark theme: {}", dark_theme);
-                                    return Err(ConfigError::ErrLoadingTheme(
-                                        err_message,
-                                    ));
-                                }
-                            }
-
-                            if adaptive_colors.light.is_some()
-                                && adaptive_colors.dark.is_some()
-                            {
-                                decoded.adaptive_colors = Some(adaptive_colors);
-                            }
-                        }
-
-                        Ok(decoded)
-                    }
-                    Err(err_message) => {
-                        Err(ConfigError::ErrLoadingConfig(err_message.to_string()))
-                    }
-                },
+                Ok(content) => {
+                    Config::from_toml(&content, Some(&config_dir_path().join("themes")))
+                }
                 Err(err_message) => {
                     Err(ConfigError::ErrLoadingConfig(err_message.to_string()))
                 }
@@ -490,6 +430,75 @@ impl Config {
         } else {
             Err(ConfigError::PathNotFound)
         }
+    }
+
+    fn from_toml(content: &str, theme_path: Option<&Path>) -> Result<Self, ConfigError> {
+        let mut user: toml::Table = toml::from_str(content).map_err(|err_message| {
+            ConfigError::ErrLoadingConfig(err_message.to_string())
+        })?;
+        let mut decoded = with_nova_base(user.clone()).map_err(|err_message| {
+            ConfigError::ErrLoadingConfig(err_message.to_string())
+        })?;
+        // Explicit colors must survive theme selection and system appearance changes.
+        user.retain(|key, _| key == "colors");
+        let theme = &decoded.theme;
+        if !theme.is_empty() {
+            decoded.colors = Config::load_named_theme(theme_path, theme, &user)
+                .map_err(ConfigError::ErrLoadingTheme)?
+                .colors;
+        }
+
+        if let Some(adaptive_theme) = &decoded.adaptive_theme {
+            decoded.adaptive_colors = Some(AdaptiveColors {
+                light: Some(
+                    Config::load_named_theme(theme_path, &adaptive_theme.light, &user)
+                        .map_err(ConfigError::ErrLoadingTheme)?
+                        .colors,
+                ),
+                dark: Some(
+                    Config::load_named_theme(theme_path, &adaptive_theme.dark, &user)
+                        .map_err(ConfigError::ErrLoadingTheme)?
+                        .colors,
+                ),
+            });
+        }
+
+        Ok(decoded)
+    }
+
+    /// Themes in the config directory win; Nova's palettes are built in.
+    fn load_named_theme(
+        theme_path: Option<&Path>,
+        name: &str,
+        colors: &toml::Table,
+    ) -> Result<Theme, String> {
+        let content = if let Some(theme_path) = theme_path {
+            let path = theme_path.join(name).with_extension("toml");
+            match std::fs::read_to_string(&path) {
+                Ok(content) => Some(content),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => {
+                    return Err(format!("error reading {}: {error}", path.display()))
+                }
+            }
+        } else {
+            None
+        };
+        let content = content
+            .as_deref()
+            .or_else(|| {
+                NOVA_THEMES
+                    .iter()
+                    .find(|(nova, _)| *nova == name)
+                    .map(|(_, content)| *content)
+            })
+            .ok_or_else(|| format!("theme '{name}' does not exist"))?;
+        let mut theme: toml::Table = toml::from_str(content)
+            .map_err(|error| format!("error parsing theme '{name}': {error}"))?;
+        overlay(&mut theme, colors.clone());
+        toml::Value::Table(theme)
+            .try_into()
+            .map_err(|error| format!("error parsing theme '{name}': {error}"))
     }
 
     pub fn overwrite_based_on_platform(&mut self) {
@@ -1618,5 +1627,90 @@ mod tests {
         // Before applying platform overrides, should only have global env vars
         assert_eq!(result.env_vars.len(), 1);
         assert!(result.env_vars.contains(&String::from("GLOBAL=1")));
+    }
+
+    #[test]
+    fn nova_base_fills_missing_keys_and_user_keys_win() {
+        let themes =
+            tmp_dir().join(format!("nrio-nova-base-themes-{}", std::process::id()));
+        std::fs::create_dir(&themes).unwrap();
+        let base = Config::from_toml("", Some(&themes)).unwrap();
+        assert_eq!(base.line_height, 1.12);
+        assert_eq!(base.fonts.bold.family, "JetBrains Mono");
+
+        let shell_only =
+            Config::from_toml("[shell]\nprogram = 'fish'\n", Some(&themes)).unwrap();
+        assert_eq!(shell_only.shell.program.as_deref(), Some("fish"));
+        assert_eq!(
+            Config {
+                shell: base.shell.clone(),
+                ..shell_only.clone()
+            },
+            base
+        );
+        assert_eq!(shell_only.window.opacity, 0.7);
+        assert_eq!(
+            shell_only.navigation.mode,
+            navigation::NavigationMode::Plain
+        );
+        let dark: Theme = toml::from_str(NOVA_THEMES[0].1).unwrap();
+        let adaptive = shell_only.adaptive_colors.unwrap();
+        assert_eq!(adaptive.dark, Some(dark.colors));
+
+        let user = Config::from_toml(
+            "[window]\nopacity = 1.0\n[fonts.regular]\nfamily = 'Fira Code'\n",
+            Some(&themes),
+        )
+        .unwrap();
+        assert_eq!(user.window.opacity, 1.0);
+        assert_eq!(user.window.blur, shell_only.window.blur);
+        // `fonts.family` would replace every slot family, including the user's.
+        assert_eq!(user.fonts.family, None);
+        assert_eq!(user.fonts.regular.family, "Fira Code");
+
+        let custom = "[colors]\nbackground = '#123456'\n";
+        std::fs::write(themes.join("nova-light.toml"), custom).unwrap();
+        let custom: Theme = toml::from_str(custom).unwrap();
+        let light = Config::from_toml("", Some(&themes))
+            .unwrap()
+            .adaptive_colors
+            .unwrap();
+        assert_eq!(light.light, Some(custom.colors));
+
+        let themed = Config::from_toml("theme = 'nova-light'\n", Some(&themes)).unwrap();
+        assert!(themed.adaptive_colors.is_none());
+        assert_eq!(themed.colors, custom.colors);
+
+        std::fs::write(themes.join("nova-light.toml"), "[invalid").unwrap();
+        assert!(Config::from_toml("", Some(&themes)).is_err());
+        assert_eq!(Config::base(), base);
+        std::fs::remove_dir_all(themes).unwrap();
+    }
+
+    #[test]
+    fn nova_user_colors_override_adaptive_palettes() {
+        let themes = tmp_dir().join(format!("nrio-nova-colors-{}", std::process::id()));
+        let config = Config::from_toml(
+            "[colors]\ncursor = '#123456'\nbackground = '#654321'\n",
+            Some(&themes),
+        )
+        .unwrap();
+        let adaptive = config.adaptive_colors.unwrap();
+        for colors in [adaptive.dark.unwrap(), adaptive.light.unwrap()] {
+            assert_eq!(colors.cursor, hex_to_color_arr("#123456"));
+            assert_eq!(
+                colors.background,
+                (hex_to_color_arr("#654321"), hex_to_color_wgpu("#654321"))
+            );
+        }
+    }
+
+    #[test]
+    fn nova_unreadable_theme_returns_error() {
+        let themes =
+            tmp_dir().join(format!("nrio-nova-unreadable-{}", std::process::id()));
+        std::fs::create_dir_all(themes.join("nova-dark.toml")).unwrap();
+        assert!(Config::from_toml("", Some(&themes)).is_err());
+        std::fs::remove_dir_all(themes).unwrap();
     }
 }

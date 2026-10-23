@@ -570,7 +570,7 @@ impl ApplicationHandler<EventPayload> for Application<'_> {
                     match rio_backend::config::Config::try_load() {
                         Ok(config) => (config, None),
                         Err(error) => {
-                            (rio_backend::config::Config::default(), Some(error))
+                            (rio_backend::config::Config::base(), Some(error))
                         }
                     };
                 apply_theme_mode(&mut config, self.theme_mode);

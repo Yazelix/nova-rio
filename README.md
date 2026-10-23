@@ -9,13 +9,24 @@ October 2026, Zellij's own terminal window is close to release.
 This is Yazelix Nova's minimal [Rio](https://github.com/raphamorim/rio)
 fork. The active `edge` branch starts from exact upstream revision
 `b2e7c38bdc56bb86b346ca4f37b9aeaa5151d790` (Rio 0.5.20) and carries only
-eleven behavioral deltas:
+twelve behavioral deltas:
 
 - Standalone distribution uses `nrio`, independent `nrio` config directories,
   `NRIO_CONFIG_HOME`, and the `Nova Rio` / `com.yazelix.nova-rio` application
   identity. The Nix overlay exports `nrio` without overriding `pkgs.rio`.
   Retire this identity delta when the fork is removed or upstream owns an
   independently selectable distribution identity.
+- Nova's terminal look is the built-in base configuration
+  (`rio-backend/src/config/nova/`): borderless plain window, 0.70 opacity with
+  blur and cell opacity, JetBrains Mono 16 with Nerd Font and Noto symbol maps,
+  line height 1.12, trail cursor, and adaptive `nova-dark` / `nova-light`
+  palettes. The user's `config.toml` overlays it key by key: tables merge, other
+  values replace, and a `theme` without `adaptive-theme` drops the adaptive
+  palettes. Explicit `[colors]` keys override the selected palettes. A missing
+  or invalid file falls back to the embedded base, without loading user themes.
+  Themes in the config directory's `themes` win over the built-in Nova palettes.
+  The Nix package supplies the fonts; other builds find them by family name.
+  Retire this delta with the `nrio` identity.
 
 - Alternate-screen `CSI 2 J` clears obsolete direct Kitty placements. Remove
   this when upstream preserves the same main-screen scrollback boundary.
@@ -66,16 +77,19 @@ eleven behavioral deltas:
 
 - `--config-editor` validates TOML from stdin without loading assets or opening a
   window, then prints a version-1 TOML inventory of eight common global settings.
-  Defaults and accepted blur choices come from native config types; the complete
-  native parser validates each candidate. Platform overrides retain precedence.
+  Defaults are the effective values over Nova's built-in base, and accepted blur
+  choices come from native config types; the complete native parser validates
+  each candidate. Platform overrides retain precedence.
   This is RIO-CONFIG-UI-001, consumed by Nova Ratconfig. It is a finite editor
   surface, not a complete schema or an asset-availability check. Remove this
   delta when upstream provides an equivalent headless inventory and validator.
 
 The config-editor mechanism was reviewed against upstream `b2e7c38` and
 `6b0f5c8a`: the existing `--write-config` writes a file but provides no editor
-inventory or candidate validation. No dependencies or config defaults change.
+inventory or candidate validation. The editor adds no dependencies.
 Run its contract with `cargo test -p rio-backend -p rioterm --features rioterm/wgpu config_editor_uses_native_defaults_and_validation`.
+The base overlay regressions are
+`cargo test -p rio-backend -p rioterm --features rioterm/wgpu nova_`.
 
 The half-block regression is
 `cargo test -p rioterm --features wgpu half_block_compositing`.
@@ -91,7 +105,7 @@ coverage-aware compositing rather than applying alpha to two overlaid passes.
 
 Nova consumes exact commits rather than a moving branch. The crates, native
 configuration schema, terminal type (`rio` / `xterm-rio`), and all behavior
-outside these eleven deltas remain upstream-owned. Mars features and Yazelix
+outside these twelve deltas remain upstream-owned. Mars features and Yazelix
 Cursors are intentionally absent.
 
 The hyperlink mechanism was reviewed against upstream `b2e7c38` and historical
@@ -126,7 +140,8 @@ The fork reads `$XDG_CONFIG_HOME/nrio/config.toml` on Linux (default
 `~/.config/nrio/config.toml`) and `~/.config/nrio/config.toml` on macOS.
 `NRIO_CONFIG_HOME` overrides that directory. Upstream `RIO_CONFIG_HOME` has no
 effect on the fork. The native configuration schema and `--write-config`
-remain Rio's. No existing Rio config is migrated or rewritten.
+remain Rio's; unset keys take Nova's built-in look. No existing Rio config is
+migrated or rewritten.
 Linux installs `com.yazelix.nova-rio.desktop`, titled **Nova Rio**, with its own
 `nrio` icon and application ID; macOS installs **NovaRio.app** with bundle ID
 `com.yazelix.nova-rio` and the `nrio` URL scheme. These coexist with upstream's

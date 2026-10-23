@@ -168,7 +168,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (mut config, config_error) = match rio_backend::config::Config::try_load() {
         Ok(config) => (config, None),
-        Err(err) => (rio_backend::config::Config::default(), Some(err)),
+        Err(err) => (rio_backend::config::Config::base(), Some(err)),
     };
 
     // Read platform property and overwrite values per OS

@@ -1,5 +1,5 @@
 // RIO-CONFIG-UI-001: a finite editor inventory, not a second configuration schema.
-use super::{window::WindowBlur, Config};
+use super::{window::WindowBlur, with_nova_base};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -19,11 +19,12 @@ struct Inventory {
     fields: Vec<Field>,
 }
 
-/// Validate native TOML without loading assets or opening a window, then describe
-/// the global settings supported by the editor. Platform overrides still win.
+/// Validate native TOML over Nova's base without loading assets or opening a window,
+/// then describe the global settings supported by the editor. Defaults are the
+/// effective values of unset keys. Platform overrides still win.
 pub fn describe(raw: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let _: Config = toml::from_str(raw)?;
-    let defaults = toml::Value::try_from(Config::default())?;
+    with_nova_base(toml::from_str(raw)?)?;
+    let defaults = toml::Value::try_from(with_nova_base(toml::Table::new())?)?;
     let mut fields = Vec::new();
     for (path, kind, description) in [
         ("window.blur", "choice", "Background blur where supported by the compositor. Glass styles require macOS 26; elsewhere they fall back to system blur. Platform window overrides take precedence."),
@@ -61,7 +62,7 @@ mod tests {
             .iter()
             .find(|field| field["path"].as_str() == Some("window.blur"))
             .unwrap();
-        assert_eq!(blur["default"].as_bool(), Some(false));
+        assert_eq!(blur["default"].as_bool(), Some(true));
         for value in blur["choices"].as_array().unwrap() {
             describe(&format!("[window]\nblur = {value}\n")).unwrap();
         }

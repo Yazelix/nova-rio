@@ -142,6 +142,13 @@ The fork reads `$XDG_CONFIG_HOME/nrio/config.toml` on Linux (default
 effect on the fork. The native configuration schema and `--write-config`
 remain Rio's; unset keys take Nova's built-in look. No existing Rio config is
 migrated or rewritten.
+
+> [!WARNING]
+> The built-in look turns off scrollback (`scrollback-history-limit = 0`),
+> because Nova's Zellij keeps it. If `nrio` runs a plain shell instead of
+> `yzx enter`, set `scrollback-history-limit = 10000` (upstream Rio's default)
+> in `config.toml`.
+
 Linux installs `com.yazelix.nova-rio.desktop`, titled **Nova Rio**, with its own
 `nrio` icon and application ID; macOS installs **NovaRio.app** with bundle ID
 `com.yazelix.nova-rio` and the `nrio` URL scheme. These coexist with upstream's
